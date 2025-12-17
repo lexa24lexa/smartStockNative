@@ -1,7 +1,7 @@
 # SmartStock - Retailer stock tracker 
 *SmartStock* concerns retail inventory management activities within a chain of supermarkets. The system monitors product quantities, sales, refilling activities, and supplier shipments, while providing Smart Prediction Logic to optimize restocking decisions 
 
-**Developed by:**  
+### **Developed by:**  
 - (PM + FED) Alexandra Smirnova - 293835
 - (BED) Álvaro Moreno - 293833
 - (FED) Victor Alleon - 293877
@@ -9,15 +9,15 @@
 - (BED) Francisco Marín - 293985
 - (BED) Antonio Sánchez - 293982
 
-**Created with**
+### **Created with**
 
 ***Front-End***
-- React (Vite TS)
+- React Native + Native Web (TS)
 
 ***Back-End***
 - Python
 
-**Installation guide**
+### **Installation guide**
 
 ***Front-End***
 
@@ -25,6 +25,20 @@ Inside of the frontend folder:
 ##### 1. 
 npm install
 ##### 2. 
-npm run dev
+npm run android
+
+npm run ios # you need to use macOS to build the iOS project - use the Expo app if you need to do iOS development without a Mac
+
+npm run web
+#### 3. 
+npx expo install @react-navigation/native
+
+npx expo install @react-navigation/bottom-tabs
+
+npx expo install react-native-screens 
+react-native-safe-area-context
+
+npx expo install @expo/vector-icons
 
 ***Back-End***
+To be added
