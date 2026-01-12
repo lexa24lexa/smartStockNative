@@ -28,7 +28,7 @@ const Header: React.FC<HeaderProps> = ({ onRefresh }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>SmartStock</Text>
+      <Text style={styles.title}>Meroski</Text>
       <TouchableOpacity onPress={handleRefresh} style={styles.button}>
         <Text style={styles.icon}>⟳</Text>
       </TouchableOpacity>
