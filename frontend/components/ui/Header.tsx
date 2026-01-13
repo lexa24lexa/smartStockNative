@@ -13,7 +13,6 @@ const Header: React.FC<HeaderProps> = ({ onRefresh }) => {
 
   return (
     <View style={styles.container}>
-      {/* Aqui: clicar em Meroski leva para a Dashboard */}
       <TouchableOpacity onPress={() => router.push("/Dashboard")}>
         <Text style={styles.title}>Meroski</Text>
       </TouchableOpacity>

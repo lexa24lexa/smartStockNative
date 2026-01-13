@@ -17,7 +17,7 @@ type RouteParams = {
 
 export default function OrderProduct() {
   const route = useRoute<RouteProp<RouteParams, "OrderProduct">>();
-  const navigation = useNavigation(); // <--- para voltar
+  const navigation = useNavigation();
 
   const { product, quantity } = route.params;
   const [value, setValue] = useState(quantity);
@@ -71,7 +71,7 @@ export default function OrderProduct() {
 
       <TouchableOpacity
         style={styles.dangerButton}
-        onPress={() => navigation.goBack()} // <--- cancelar volta para Stock
+        onPress={() => navigation.goBack()}
       >
         <Text style={styles.primaryText}>Cancel order</Text>
       </TouchableOpacity>
