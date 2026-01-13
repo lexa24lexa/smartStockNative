@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import Layout from "../components/ui/Layout";
+import Layout from "../../components/ui/Layout";
 
 function StatCard({
   value,

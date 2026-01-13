@@ -1,34 +1,23 @@
-import { NavigationProp, ParamListBase, useNavigation } from "@react-navigation/native";
+import { router } from "expo-router";
 import React from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface HeaderProps {
   onRefresh?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ onRefresh }) => {
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
-
   const handleRefresh = () => {
-    if (Platform.OS === "web") {
-      // Reset the current route to trigger a re-render without full page reload
-      const state = navigation.getState();
-      const currentRoute = state.routes[state.index]?.name;
-
-      if (currentRoute) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: currentRoute }],
-        });
-      }
-    } else if (onRefresh) {
-      onRefresh();
-    }
+    if (onRefresh) onRefresh();
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Meroski</Text>
+      {/* Aqui: clicar em Meroski leva para a Dashboard */}
+      <TouchableOpacity onPress={() => router.push("/Dashboard")}>
+        <Text style={styles.title}>Meroski</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity onPress={handleRefresh} style={styles.button}>
         <Text style={styles.icon}>⟳</Text>
       </TouchableOpacity>

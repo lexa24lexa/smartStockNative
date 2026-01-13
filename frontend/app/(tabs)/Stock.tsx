@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import Layout from "../components/ui/Layout";
+import Layout from "../../components/ui/Layout";
 
 interface ProductRowProps {
   name: string;
@@ -76,7 +76,7 @@ export default function Stock() {
         status="Stable"
         color="#059669"
         onPress={() =>
-          navigation.navigate("OrderProduct", {
+          navigation.navigate("Order-product", {
             product: "Product A",
             quantity: 120,
           })
@@ -89,7 +89,7 @@ export default function Stock() {
         status="Critical"
         color="#DC2626"
         onPress={() =>
-          navigation.navigate("OrderProduct", {
+          navigation.navigate("Order-product", {
             product: "Product B",
             quantity: 50,
           })
@@ -102,7 +102,7 @@ export default function Stock() {
         status="Low"
         color="#F59E0B"
         onPress={() =>
-          navigation.navigate("OrderProduct", {
+          navigation.navigate("Order-product", {
             product: "Product C",
             quantity: 70,
           })
