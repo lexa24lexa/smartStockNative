@@ -1,7 +1,5 @@
-
 from pydantic import BaseModel
 from typing import Optional, List
-
 
 class ProductBase(BaseModel):
     name: str
@@ -21,3 +19,4 @@ class StockBase(BaseModel):
     store_id: int
     batch_id: int
     quantity: int
+    reorder_level: int # Added for FR02
