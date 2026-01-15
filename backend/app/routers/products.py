@@ -17,4 +17,11 @@ class ProductResponse(BaseModel):
 @router.get("/products", response_model=List[ProductResponse])
 def get_products(db: Session = Depends(database.get_db)):
     products = db.query(models.Product).all()
+
+    for product in products:
+
+        qty = getattr(product, "quantity", 0) 
+        
+        product.facing = qty // 10 
+
     return products
