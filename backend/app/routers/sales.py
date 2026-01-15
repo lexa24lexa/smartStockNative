@@ -163,3 +163,42 @@ def create_sale_fifo(payload: SaleFIFOInput, db: Session = Depends(database.get_
         db.rollback()
         raise e
 
+class FIFOViolationCheckInput(BaseModel):
+    store_id: int
+    product_id: int
+    selected_batch_id: int
+
+
+def _check_fifo_violation(db: Session, store_id: int, product_id: int, selected_batch_id: int):
+    fifo_rows = _fifo_batches_for_product(db, store_id, product_id)
+
+    if not fifo_rows:
+        return {
+            "is_violation": False,
+            "message": "No stock available for this product in this store.",
+            "expected_batch_id": None,
+            "expected_batch_code": None,
+        }
+
+    expected = fifo_rows[0][0]
+
+    if expected.batch_id == selected_batch_id:
+        return {
+            "is_violation": False,
+            "message": "OK (FIFO respected).",
+            "expected_batch_id": expected.batch_id,
+            "expected_batch_code": expected.batch_code,
+        }
+
+    return {
+        "is_violation": True,
+        "message": "FIFO violation: selected batch is not the next FIFO batch.",
+        "expected_batch_id": expected.batch_id,
+        "expected_batch_code": expected.batch_code,
+    }
+
+
+@router.post("/fifo/check")
+def fifo_check(payload: FIFOViolationCheckInput, db: Session = Depends(database.get_db)):
+    return _check_fifo_violation(db, payload.store_id, payload.product_id, payload.selected_batch_id)
+
