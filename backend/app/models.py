@@ -62,3 +62,14 @@ class SaleLine(Base):
     batch_id = Column(Integer, ForeignKey("BATCH.batch_id"))
     quantity = Column(Integer)
     subtotal = Column(Float)
+
+class ReportEmailLog(Base):
+    __tablename__ = "REPORT_EMAIL_LOG"
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, server_default=func.now())
+    store_id = Column(Integer, ForeignKey("STORE.store_id"), nullable=True)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    recipients = Column(String(500), nullable=False)
+    status = Column(String(30), nullable=False)  # "success" | "failed"
+    message = Column(String(1000), nullable=True)
