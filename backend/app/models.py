@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, DateTime, UniqueConstraint
 from sqlalchemy.sql import func
 from .database import Base
 
@@ -62,3 +62,33 @@ class SaleLine(Base):
     batch_id = Column(Integer, ForeignKey("BATCH.batch_id"))
     quantity = Column(Integer)
     subtotal = Column(Float)
+
+class ReplenishmentFrequency(Base):
+    __tablename__ = "REPLENISHMENT_FREQUENCY"
+    frequency_id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("PRODUCT.product_id"), nullable=False)
+    store_id = Column(Integer, ForeignKey("STORE.store_id"), nullable=False)
+    replenishment_frequency = Column(Integer, nullable=False) # Days (1-3)
+    last_replenishment_date = Column(Date, nullable=True)
+
+    __table_args__ = (UniqueConstraint('product_id', 'store_id', name='uq_product_store'),)
+
+class ReplenishmentList(Base):
+    __tablename__ = "REPLENISHMENT_LIST"
+    list_id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("STORE.store_id"), nullable=False)
+    list_date = Column(Date, nullable=False)
+    status = Column(String(20), default="draft") # draft, completed, cancelled
+    created_at = Column(DateTime, server_default=func.now())
+    notes = Column(String(500), nullable=True)
+
+class ReplenishmentListItem(Base):
+    __tablename__ = "REPLENISHMENT_LIST_ITEM"
+    item_id = Column(Integer, primary_key=True, index=True)
+    list_id = Column(Integer, ForeignKey("REPLENISHMENT_LIST.list_id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("PRODUCT.product_id"), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    current_stock = Column(Integer, nullable=False)
+    reason = Column(String(100), nullable=False)
+    priority = Column(String(20), nullable=False) # high, medium, low
+    notes = Column(String(500), nullable=True)

@@ -1,8 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, cast, Date
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
+from datetime import date, datetime
+from io import BytesIO
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill
 from .. import models, database, schemas
 
 router = APIRouter()
@@ -164,3 +174,212 @@ def get_average_daily_sales_per_product(product_id: int, store_id: int, db: Sess
         total_days_with_sales=total_days,
         total_quantity_sold=int(total_quantity)
     )
+
+def generate_sales_pdf_report(sales_data: List, store_name: str, report_date: date, total_amount: float):
+    """Generate PDF report for daily sales"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#1a1a1a'),
+        spaceAfter=30,
+        alignment=1  # Center alignment
+    )
+
+    # Title
+    elements.append(Paragraph("Daily Sales Report", title_style))
+    elements.append(Spacer(1, 0.2*inch))
+
+    # Report info
+    info_data = [
+        ['Store:', store_name],
+        ['Report Date:', report_date.strftime('%Y-%m-%d')],
+        ['Total Sales:', f'€{total_amount:.2f}'],
+        ['Total Transactions:', str(len(sales_data))]
+    ]
+    info_table = Table(info_data, colWidths=[2*inch, 4*inch])
+    info_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 12),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 0.3*inch))
+
+    # Sales table
+    if sales_data:
+        table_data = [['Sale ID', 'Product', 'Quantity', 'Unit Price', 'Subtotal']]
+        for sale in sales_data:
+            table_data.append([
+                str(sale['sale_id']),
+                sale['product_name'],
+                str(sale['quantity']),
+                f"€{sale['unit_price']:.2f}",
+                f"€{sale['subtotal']:.2f}"
+            ])
+
+        sales_table = Table(table_data, colWidths=[1*inch, 2.5*inch, 1*inch, 1.2*inch, 1.3*inch])
+        sales_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+        ]))
+        elements.append(sales_table)
+    else:
+        elements.append(Paragraph("No sales recorded for this date.", styles['Normal']))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+def generate_sales_excel_report(sales_data: List, store_name: str, report_date: date, total_amount: float):
+    """Generate Excel report for daily sales"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Daily Sales Report"
+
+    # Header style
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=12)
+    title_font = Font(bold=True, size=16)
+
+    # Title
+    ws['A1'] = "Daily Sales Report"
+    ws['A1'].font = title_font
+    ws.merge_cells('A1:E1')
+    ws['A1'].alignment = Alignment(horizontal='center')
+
+    # Report info
+    ws['A3'] = "Store:"
+    ws['B3'] = store_name
+    ws['A4'] = "Report Date:"
+    ws['B4'] = report_date.strftime('%Y-%m-%d')
+    ws['A5'] = "Total Sales:"
+    ws['B5'] = f'€{total_amount:.2f}'
+    ws['A6'] = "Total Transactions:"
+    ws['B6'] = len(sales_data)
+
+    # Table headers
+    headers = ['Sale ID', 'Product', 'Quantity', 'Unit Price', 'Subtotal']
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(row=8, column=col)
+        cell.value = header
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+
+    # Sales data
+    for row_idx, sale in enumerate(sales_data, start=9):
+        ws.cell(row=row_idx, column=1).value = sale['sale_id']
+        ws.cell(row=row_idx, column=2).value = sale['product_name']
+        ws.cell(row=row_idx, column=3).value = sale['quantity']
+        ws.cell(row=row_idx, column=4).value = sale['unit_price']
+        ws.cell(row=row_idx, column=5).value = sale['subtotal']
+
+        # Format currency columns
+        ws.cell(row=row_idx, column=4).number_format = '€#,##0.00'
+        ws.cell(row=row_idx, column=5).number_format = '€#,##0.00'
+
+    # Adjust column widths
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 30
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 15
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+@router.get("/sales/daily-report")
+def get_daily_sales_report(
+    store_id: int,
+    format: str = Query(..., description="Report format: 'pdf' or 'excel'"),
+    report_date: Optional[date] = None,
+    db: Session = Depends(database.get_db)
+):
+    """
+    Generate daily sales report in PDF or Excel format.
+    format: 'pdf' or 'excel'
+    report_date: Optional date (defaults to today)
+    """
+    report_format = format.lower()
+    if report_format not in ['pdf', 'excel']:
+        raise HTTPException(status_code=400, detail="Format must be 'pdf' or 'excel'")
+
+    store = db.query(models.Store).filter(models.Store.store_id == store_id).first()
+    if not store:
+        raise HTTPException(status_code=404, detail=f"Store with ID {store_id} not found")
+
+    # Use today's date if not provided
+    if report_date is None:
+        report_date = date.today()
+
+    # Get sales for the specified date
+    start_datetime = datetime.combine(report_date, datetime.min.time())
+    end_datetime = datetime.combine(report_date, datetime.max.time())
+
+    sales = db.query(models.Sale).filter(
+        models.Sale.store_id == store_id,
+        models.Sale.date >= start_datetime,
+        models.Sale.date <= end_datetime
+    ).all()
+
+    # Get detailed sales data
+    sales_data = []
+    total_amount = 0.0
+
+    for sale in sales:
+        sale_lines = db.query(
+            models.SaleLine,
+            models.Product.name.label('product_name'),
+            models.Product.unit_price
+        ).join(
+            models.Batch, models.Batch.batch_id == models.SaleLine.batch_id
+        ).join(
+            models.Product, models.Product.product_id == models.Batch.product_id
+        ).filter(
+            models.SaleLine.sale_id == sale.sale_id
+        ).all()
+
+        for sale_line, product_name, unit_price in sale_lines:
+            sales_data.append({
+                'sale_id': sale.sale_id,
+                'product_name': product_name,
+                'quantity': sale_line.quantity,
+                'unit_price': unit_price,
+                'subtotal': sale_line.subtotal
+            })
+            total_amount += sale_line.subtotal
+
+    # Generate report based on format
+    if report_format == 'pdf':
+        buffer = generate_sales_pdf_report(sales_data, store.name, report_date, total_amount)
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=daily_sales_report_{report_date}.pdf"}
+        )
+    else:  # excel
+        buffer = generate_sales_excel_report(sales_data, store.name, report_date, total_amount)
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=daily_sales_report_{report_date}.xlsx"}
+        )
