@@ -1,60 +1,90 @@
+from datetime import date
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List
 from pydantic import BaseModel
-from .. import models, database
+from sqlalchemy.orm import Session
+
+from app import models, database
 
 router = APIRouter()
 
-class SaleItemInput(BaseModel):
-    batch_id: int
+
+class StockResponse(BaseModel):
+    product_name: str
+    batch_code: str
+    expiration_date: Optional[date]
     quantity: int
 
-class SaleInput(BaseModel):
-    store_id: int
-    items: List[SaleItemInput]
 
-@router.post("/sales")
-def create_sale(sale_input: SaleInput, db: Session = Depends(database.get_db)):
-    
-    total_amount = 0
-    
-    new_sale = models.Sale(store_id=sale_input.store_id, total_amount=0)
-    db.add(new_sale)
-    db.commit()
-    db.refresh(new_sale)
+class BatchStockResponse(BaseModel):
+    batch_id: int
+    batch_code: str
+    expiration_date: Optional[date]
+    quantity: int
 
-    try:
-        for item in sale_input.items:
-            stock_record = db.query(models.Stock).filter(
-                models.Stock.store_id == sale_input.store_id,
-                models.Stock.batch_id == item.batch_id
-            ).first()
 
-            if not stock_record or stock_record.quantity < item.quantity:
-                raise HTTPException(status_code=400, detail=f"Insufficient stock for batch {item.batch_id}")
+@router.get("/stock/{store_id}", response_model=List[StockResponse])
+def get_store_stock(store_id: int, db: Session = Depends(database.get_db)):
+    if store_id <= 0:
+        raise HTTPException(status_code=400, detail="store_id must be a positive integer.")
 
-            stock_record.quantity -= item.quantity
+    results = (
+        db.query(
+            models.Product.name,
+            models.Batch.batch_code,
+            models.Batch.expiration_date,
+            models.Stock.quantity,
+        )
+        .join(models.Batch, models.Batch.product_id == models.Product.product_id)
+        .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)
+        .filter(models.Stock.store_id == store_id)
+        .all()
+    )
 
-            batch = db.query(models.Batch).filter(models.Batch.batch_id == item.batch_id).first()
-            product = db.query(models.Product).filter(models.Product.product_id == batch.product_id).first()
-            
-            subtotal = product.unit_price * item.quantity
-            total_amount += subtotal
-
-            sale_line = models.SaleLine(
-                sale_id=new_sale.sale_id,
-                batch_id=item.batch_id,
-                quantity=item.quantity,
-                subtotal=subtotal
+    response_data: List[StockResponse] = []
+    for r in results:
+        response_data.append(
+            StockResponse(
+                product_name=r.name,
+                batch_code=r.batch_code,
+                expiration_date=r.expiration_date,
+                quantity=r.quantity,
             )
-            db.add(sale_line)
+        )
+    return response_data
 
-        new_sale.total_amount = total_amount
-        db.commit()
-        
-        return {"message": "Sale processed successfully", "sale_id": new_sale.sale_id, "total": total_amount}
 
-    except Exception as e:
-        db.rollback()
-        raise e
+@router.get("/stock/{store_id}/product/{product_id}/batches", response_model=List[BatchStockResponse])
+def get_product_batches_in_store(store_id: int, product_id: int, db: Session = Depends(database.get_db)):
+    if store_id <= 0 or product_id <= 0:
+        raise HTTPException(status_code=400, detail="store_id and product_id must be positive integers.")
+
+    results = (
+        db.query(
+            models.Batch.batch_id,
+            models.Batch.batch_code,
+            models.Batch.expiration_date,
+            models.Stock.quantity,
+        )
+        .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)
+        .filter(models.Stock.store_id == store_id)
+        .filter(models.Batch.product_id == product_id)
+        .filter(models.Stock.quantity > 0)
+        .order_by(
+            models.Batch.expiration_date.is_(None),  # NULLs last
+            models.Batch.expiration_date.asc(),
+            models.Batch.batch_id.asc(),
+        )
+        .all()
+    )
+
+    return [
+        BatchStockResponse(
+            batch_id=r.batch_id,
+            batch_code=r.batch_code,
+            expiration_date=r.expiration_date,
+            quantity=r.quantity,
+        )
+        for r in results
+    ]
