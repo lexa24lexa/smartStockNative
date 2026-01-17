@@ -1,33 +1,38 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from datetime import datetime
-from typing import Optional, List, Dict, Any
-import io
+from __future__ import annotations
+
 import csv
+import io
 import os
 import smtplib
+from datetime import datetime
 from email.message import EmailMessage
+from typing import Any, Dict, List, Optional
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from .. import models, database
+from app import models, database
 
 router = APIRouter()
 
-_scheduler = Optional[BackgroundScheduler] = None
+_scheduler: Optional[BackgroundScheduler] = None
 _last_next_run: Optional[str] = None
+
 
 def _month_range(year: int, month: int):
     if month < 1 or month > 12:
-        raise HTTPException(status_code=400, detail="Invalid month")
+        raise HTTPException(status_code=400, detail="month must be 1..12")
     start = datetime(year, month, 1)
     if month == 12:
         end = datetime(year + 1, 1, 1)
     else:
         end = datetime(year, month + 1, 1)
     return start, end
+
 
 def _build_monthly_report(db: Session, store_id: int, year: int, month: int) -> Dict[str, Any]:
     start, end = _month_range(year, month)
@@ -40,19 +45,28 @@ def _build_monthly_report(db: Session, store_id: int, year: int, month: int) -> 
         .scalar()
     ) or 0
 
-    total_items_sold = (
+    total_revenue = (
         db.query(func.coalesce(func.sum(models.Sale.total_amount), 0.0))
+        .filter(models.Sale.store_id == store_id)
+        .filter(models.Sale.date >= start)
+        .filter(models.Sale.date < end)
+        .scalar()
+    ) or 0.0
+
+    total_items_sold = (
+        db.query(func.coalesce(func.sum(models.SaleLine.quantity), 0))
+        .join(models.Sale, models.Sale.sale_id == models.SaleLine.sale_id)
         .filter(models.Sale.store_id == store_id)
         .filter(models.Sale.date >= start)
         .filter(models.Sale.date < end)
         .scalar()
     ) or 0
 
-    top_products_row = (
+    top_products_rows = (
         db.query(
             models.Product.product_id,
             models.Product.name,
-            func.sum(models.SaleLine.quantity).label("quantity_sold"),
+            func.sum(models.SaleLine.quantity).label("qty_sold"),
             func.sum(models.SaleLine.subtotal).label("revenue"),
         )
         .join(models.Batch, models.Batch.product_id == models.Product.product_id)
@@ -77,7 +91,7 @@ def _build_monthly_report(db: Session, store_id: int, year: int, month: int) -> 
         for r in top_products_rows
     ]
 
-    return{
+    return {
         "store_id": store_id,
         "year": year,
         "month": month,
@@ -88,6 +102,7 @@ def _build_monthly_report(db: Session, store_id: int, year: int, month: int) -> 
         "total_revenue": float(total_revenue),
         "top_products": top_products,
     }
+
 
 def _report_to_csv(report: Dict[str, Any]) -> str:
     out = io.StringIO()
@@ -109,26 +124,32 @@ def _report_to_csv(report: Dict[str, Any]) -> str:
 
     return out.getvalue()
 
+
 @router.get("/reports/monthly")
 def get_monthly_report(
-        store_id: int = Query(...),
-        year: int = Query(...),
-        month: int = Query(...),
-        format: str = Query("json", pattern = "`(json|csv)$"),
-        db: Session = Depends(database.get_db)
+    store_id: int = Query(...),
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    format: str = Query("json", pattern=r"^(json|csv)$"),
+    db: Session = Depends(database.get_db),
 ):
+    _now = datetime.now()
+    year = year if year is not None else _now.year
+    month = month if month is not None else _now.month
+
     report = _build_monthly_report(db, store_id, year, month)
 
-    if format = "json":
+    if format == "json":
         return report
 
     csv_text = _report_to_csv(report)
-    filename = f"monthly_report_store{store_id}_{year}-{month}.csv"
+    filename = f"monthly_report_store{store_id}_{year}-{month:02d}.csv"
     return StreamingResponse(
         io.StringIO(csv_text),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
 
 def _smtp_send_csv(subject: str, body: str, recipients: List[str], filename: str, csv_text: str):
     host = os.getenv("SMTP_HOST")
@@ -138,7 +159,9 @@ def _smtp_send_csv(subject: str, body: str, recipients: List[str], filename: str
     sender = os.getenv("SMTP_FROM", user)
 
     if not host or not user or not password or not sender:
-        raise RuntimeError("SMTP env vars missing: SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM (and optional SMTP_PORT)")
+        raise RuntimeError(
+            "SMTP env vars missing: SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM (and optional SMTP_PORT)"
+        )
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -153,14 +176,14 @@ def _smtp_send_csv(subject: str, body: str, recipients: List[str], filename: str
         s.login(user, password)
         s.send_message(msg)
 
+
 def _send_monthly_reports_job():
-    from ..database import SessionLocal  # local import to avoid circulars
-    db = SessionLocal()
+    # no imports inside functions
+    db = database.SessionLocal()
     try:
-        # previous month
-        now = datetime.now()
-        year = now.year
-        month = now.month - 1
+        _now = datetime.now()  # single now for this job run
+        year = _now.year
+        month = _now.month - 1
         if month == 0:
             month = 12
             year -= 1
@@ -182,29 +205,34 @@ def _send_monthly_reports_job():
                     body="Attached is the monthly performance report (CSV).",
                     recipients=recipients,
                     filename=filename,
-                    csv_text=csv_text
+                    csv_text=csv_text,
                 )
-                db.add(models.ReportEmailLog(
-                    store_id=store_id,
-                    year=year,
-                    month=month,
-                    recipients=", ".join(recipients),
-                    status="success",
-                    message="sent"
-                ))
+                db.add(
+                    models.ReportEmailLog(
+                        store_id=store_id,
+                        year=year,
+                        month=month,
+                        recipients=", ".join(recipients),
+                        status="success",
+                        message="sent",
+                    )
+                )
                 db.commit()
             except Exception as e:
-                db.add(models.ReportEmailLog(
-                    store_id=store_id,
-                    year=year,
-                    month=month,
-                    recipients=", ".join(recipients),
-                    status="failed",
-                    message=str(e)[:900]
-                ))
+                db.add(
+                    models.ReportEmailLog(
+                        store_id=store_id,
+                        year=year,
+                        month=month,
+                        recipients=", ".join(recipients),
+                        status="failed",
+                        message=str(e)[:900],
+                    )
+                )
                 db.commit()
     finally:
         db.close()
+
 
 def _ensure_scheduler_started():
     global _scheduler, _last_next_run
@@ -212,16 +240,22 @@ def _ensure_scheduler_started():
         return
 
     _scheduler = BackgroundScheduler()
-
     trigger = CronTrigger(day=1, hour=8, minute=0)
-    job = _scheduler.add_job(_send_monthly_reports_job, trigger=trigger, id="send_monthly_reports", replace_existing=True)
+    job = _scheduler.add_job(
+        _send_monthly_reports_job,
+        trigger=trigger,
+        id="send_monthly_reports",
+        replace_existing=True,
+    )
 
     _scheduler.start()
     _last_next_run = job.next_run_time.isoformat() if job.next_run_time else None
 
+
 @router.on_event("startup")
 def reports_startup():
     _ensure_scheduler_started()
+
 
 @router.get("/reports/email/status")
 def email_status(db: Session = Depends(database.get_db)):
@@ -246,11 +280,11 @@ def email_status(db: Session = Depends(database.get_db)):
                 "message": l.message,
             }
             for l in logs
-        ]
+        ],
     }
+
 
 @router.post("/reports/email/send-now")
 def email_send_now(db: Session = Depends(database.get_db)):
     _send_monthly_reports_job()
     return {"message": "Triggered email job"}
-
