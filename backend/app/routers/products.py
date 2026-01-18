@@ -6,9 +6,12 @@ from sqlalchemy import func, asc, desc
 
 from app import models, schemas, database
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/products",
+    tags=["Products"]
+)
 
-@router.get("/products", response_model=List[schemas.ProductResponse])
+@router.get("", response_model=List[schemas.ProductResponse])
 def get_products(
     sort: Optional[str] = None,
     db: Session = Depends(database.get_db)
@@ -23,15 +26,14 @@ def get_products(
         .group_by(models.Product.product_id)
     )
 
-    if sort:
-        if sort == "name_asc":
-            query = query.order_by(asc(models.Product.name))
-        elif sort == "name_desc":
-            query = query.order_by(desc(models.Product.name))
-        elif sort == "price_asc":
-            query = query.order_by(asc(models.Product.unit_price))
-        elif sort == "price_desc":
-            query = query.order_by(desc(models.Product.unit_price))
+    if sort == "name_asc":
+        query = query.order_by(asc(models.Product.name))
+    elif sort == "name_desc":
+        query = query.order_by(desc(models.Product.name))
+    elif sort == "price_asc":
+        query = query.order_by(asc(models.Product.unit_price))
+    elif sort == "price_desc":
+        query = query.order_by(desc(models.Product.unit_price))
 
     results = query.all()
 
@@ -52,25 +54,3 @@ def get_products(
         )
 
     return response
-
-@router.get("/analytics/stock-by-category")
-def get_stock_by_category(db: Session = Depends(database.get_db)):
-    results = (
-        db.query(
-            models.Category.category_name,
-            func.sum(models.Stock.quantity).label("total_stock")
-        )
-        .join(models.Product, models.Category.category_id == models.Product.category_id)
-        .join(models.Batch, models.Product.product_id == models.Batch.product_id)
-        .join(models.Stock, models.Batch.batch_id == models.Stock.batch_id)
-        .group_by(models.Category.category_name)
-        .all()
-    )
-
-    return [
-        {
-            "category": category_name,
-            "total_stock": total_stock or 0
-        }
-        for category_name, total_stock in results
-    ]
