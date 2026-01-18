@@ -1,10 +1,7 @@
-
 from fastapi import FastAPI
+
 from .database import engine, Base
-from .routers import products
-from .routers import products, stock
-from .routers import products, stock, sales
-from .routers import products, stock, sales, alerts
+from .routers import products, stock, sales, alerts, reports, analytics
 
 Base.metadata.create_all(bind=engine)
 
@@ -14,7 +11,9 @@ app.include_router(products.router, tags=["Products"])
 app.include_router(stock.router, tags=["Stock"])
 app.include_router(sales.router, tags=["Sales"])
 app.include_router(alerts.router, tags=["Alerts"])
+app.include_router(reports.router, tags=["Reports"])
+app.include_router(analytics.router, tags=["Analytics"])
 
 @app.get("/")
 def read_root():
-    return {"message": "Bienvenido al Backend de SmartStock"}
+    return {"message": "Welcome to the SmartStock API"}
