@@ -1,4 +1,4 @@
-
+from app.routers import analytics
 from fastapi import FastAPI
 from .database import engine, Base
 from .routers import products
@@ -14,6 +14,7 @@ app.include_router(products.router, tags=["Products"])
 app.include_router(stock.router, tags=["Stock"])
 app.include_router(sales.router, tags=["Sales"])
 app.include_router(alerts.router, tags=["Alerts"])
+app.include_router(analytics.router)
 
 @app.get("/")
 def read_root():
