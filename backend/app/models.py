@@ -47,6 +47,8 @@ class Stock(Base):
     store_id = Column(Integer, ForeignKey("STORE.store_id"))
     batch_id = Column(Integer, ForeignKey("BATCH.batch_id"))
     quantity = Column(Integer)
+    # FR02: Field for Minimum Required Stock Calculation (per store)
+    reorder_level = Column(Integer, default=10) 
 
 class Sale(Base):
     __tablename__ = "SALE"
