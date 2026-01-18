@@ -1,5 +1,3 @@
-
-
 CREATE DATABASE IF NOT EXISTS retail_bd;
 USE retail_bd;
 
@@ -66,6 +64,7 @@ CREATE TABLE HAS_STOCK (
     store_id INT,
     batch_id INT,
     quantity INT,
+    reorder_level INT DEFAULT 10, -- FR02: Minimum stock level column
     FOREIGN KEY (store_id) REFERENCES STORE(store_id),
     FOREIGN KEY (batch_id) REFERENCES BATCH(batch_id)
 );
@@ -101,12 +100,20 @@ INSERT INTO STORE (store_id, name, address_id) VALUES (100, 'SuperMart Center', 
 
 INSERT INTO PRODUCT (product_id, name, unit_price, supplier_id, category_id) VALUES 
 (100, 'Yogurt Strawberry', 1.50, 100, 100),
+(101, 'Milk 1L', 1.20, 100, 100),
 (999, 'Expired Yogurt', 1.00, 100, 100);
 
 INSERT INTO BATCH (batch_id, product_id, batch_code, expiration_date) VALUES 
-(100, 100, 'BATCH-001', '2030-12-31');
-INSERT INTO BATCH (batch_id, product_id, batch_code, expiration_date) VALUES 
+(100, 100, 'BATCH-LOW-STOCK', '2030-12-31'),
+(101, 101, 'BATCH-OVERSTOCK', '2030-12-31'),
 (999, 999, 'BATCH-DANGER', DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY));
 
-INSERT INTO HAS_STOCK (store_id, batch_id, quantity) VALUES (100, 100, 500);
-INSERT INTO HAS_STOCK (store_id, batch_id, quantity) VALUES (100, 999, 5);
+-- SCENARIOS FOR ALERTS:
+-- 1. Low Stock (FR02/FR17): Qty (5) <= Reorder Level (10)
+INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES (100, 100, 5, 10);
+
+-- 2. Overstock (FR17 Custom Rule): Qty (500) > 3 * Reorder Level (20) -> 500 > 60
+INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES (100, 101, 500, 20);
+
+-- 3. Expiring (FR17): Expires tomorrow
+INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES (100, 999, 15, 5);
