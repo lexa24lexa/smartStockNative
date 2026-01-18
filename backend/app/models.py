@@ -47,6 +47,8 @@ class Stock(Base):
     store_id = Column(Integer, ForeignKey("STORE.store_id"))
     batch_id = Column(Integer, ForeignKey("BATCH.batch_id"))
     quantity = Column(Integer)
+    # FR02: Field for Minimum Required Stock Calculation (per store)
+    reorder_level = Column(Integer, default=10) 
 
 class Sale(Base):
     __tablename__ = "SALE"
@@ -92,3 +94,14 @@ class ReplenishmentListItem(Base):
     reason = Column(String(100), nullable=False)
     priority = Column(String(20), nullable=False) # high, medium, low
     notes = Column(String(500), nullable=True)
+
+class ReportEmailLog(Base):
+    __tablename__ = "REPORT_EMAIL_LOG"
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, server_default=func.now())
+    store_id = Column(Integer, ForeignKey("STORE.store_id"), nullable=True)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    recipients = Column(String(500), nullable=False)
+    status = Column(String(30), nullable=False)  # "success" | "failed"
+    message = Column(String(1000), nullable=True)
