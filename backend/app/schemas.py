@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import date, datetime
 
 class ProductBase(BaseModel):
     name: str
@@ -22,4 +23,94 @@ class StockBase(BaseModel):
     store_id: int
     batch_id: int
     quantity: int
-    reorder_level: int # Added for FR02
+    reorder_level: int
+
+class AverageDailySalesPerProduct(BaseModel):
+    product_id: int
+    product_name: str
+    average_daily_sales: float
+    total_days_with_sales: int
+    total_quantity_sold: int
+
+    class Config:
+        from_attributes = True
+
+class ReplenishmentFrequencyBase(BaseModel):
+    product_id: int
+    store_id: int
+    replenishment_frequency: int # Days (1-3)
+
+class ReplenishmentFrequencyCreate(ReplenishmentFrequencyBase):
+    last_replenishment_date: Optional[date] = None
+
+class ReplenishmentFrequencyResponse(ReplenishmentFrequencyBase):
+    frequency_id: int
+    last_replenishment_date: Optional[date] = None
+
+    class Config:
+        from_attributes = True
+
+class ReplenishmentFrequencyUpdate(BaseModel):
+    replenishment_frequency: Optional[int] = None # Days (1-3)
+    last_replenishment_date: Optional[date] = None
+
+class ReplenishmentRecord(BaseModel):
+    replenishment_date: Optional[date] = None # If not provided, uses today's date
+
+class ReplenishmentItem(BaseModel):
+    product_id: int
+    product_name: str
+    current_stock: int
+    replenishment_frequency: Optional[int] = None
+    last_replenishment_date: Optional[date] = None
+    next_replenishment_date: Optional[date] = None
+    reason: str # "Out of stock", "Frequency due", "Out of stock & Frequency due"
+    priority: str # "high" (out of stock), "medium" (frequency due), "low" (preventive)
+    quantity: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class ReplenishmentListBase(BaseModel):
+    store_id: int
+    list_date: date
+    notes: Optional[str] = None
+
+class ReplenishmentListCreate(ReplenishmentListBase):
+    status: Optional[str] = "draft"
+
+class ReplenishmentListResponse(ReplenishmentListBase):
+    list_id: int
+    status: str
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class ReplenishmentListItemBase(BaseModel):
+    product_id: int
+    quantity: int
+    current_stock: int
+    reason: str
+    priority: str
+    notes: Optional[str] = None
+
+class ReplenishmentListItemCreate(ReplenishmentListItemBase):
+    pass
+
+class ReplenishmentListItemResponse(ReplenishmentListItemBase):
+    item_id: int
+    list_id: int
+    product_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class ReplenishmentListItemUpdate(BaseModel):
+    quantity: Optional[int] = None
+    reason: Optional[str] = None
+    priority: Optional[str] = None
+    notes: Optional[str] = None
+
+class ReplenishmentListWithItems(ReplenishmentListResponse):
+    items: List[ReplenishmentListItemResponse] = []
