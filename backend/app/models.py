@@ -104,7 +104,7 @@ class ReplenishmentLog(Base):
     expiration_date = Column(Date, nullable=False)
     quantity = Column(Integer, nullable=False)
     user_id = Column(Integer, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, server_default=func.now())
 
 class ReportEmailLog(Base):
     __tablename__ = "REPORT_EMAIL_LOG"
