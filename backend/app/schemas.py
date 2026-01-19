@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import date, datetime
 
@@ -59,7 +59,7 @@ class ReplenishmentRecord(BaseModel):
     user_id: int
     batch_id: int
     expiration_date: date
-    quantity: int
+    quantity: int = Field(..., gt=0, description="Quantity must be a positive integer")
 
 class ReplenishmentItem(BaseModel):
     product_id: int
