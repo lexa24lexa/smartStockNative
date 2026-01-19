@@ -7,10 +7,6 @@ from .. import models, database, schemas
 
 router = APIRouter()
 
-# ============================================================================
-# Replenishment Frequency Management Endpoints
-# ============================================================================
-
 @router.post("/replenishment-frequency", response_model=schemas.ReplenishmentFrequencyResponse)
 def create_replenishment_frequency(
     frequency_data: schemas.ReplenishmentFrequencyCreate,
@@ -156,13 +152,12 @@ def record_replenishment(
     product_id: int,
     store_id: int,
     replenishment_data: Optional[schemas.ReplenishmentRecord] = Body(None),
+    user_id: int = Body(...),
+    batch_id: int = Body(...),
+    expiration_date: date = Body(...),
+    quantity: int = Body(...),
     db: Session = Depends(database.get_db)
 ):
-    """
-    Record a replenishment event for a product at a store.
-    Updates the last_replenishment_date to today (or specified date).
-    If no body is provided, uses today's date.
-    """
     frequency = db.query(models.ReplenishmentFrequency).filter(
         models.ReplenishmentFrequency.product_id == product_id,
         models.ReplenishmentFrequency.store_id == store_id
@@ -174,16 +169,32 @@ def record_replenishment(
             detail=f"Replenishment frequency not found for product {product_id} at store {store_id}"
         )
 
-    if replenishment_data is None or replenishment_data.replenishment_date is None:
-        replenishment_date = date_class.today()
-    else:
-        replenishment_date = replenishment_data.replenishment_date
-
+    replenishment_date = replenishment_data.replenishment_date if replenishment_data and replenishment_data.replenishment_date else date_class.today()
     frequency.last_replenishment_date = replenishment_date
     db.commit()
     db.refresh(frequency)
 
+    log = models.ReplenishmentLog(
+        product_id=product_id,
+        store_id=store_id,
+        batch_id=batch_id,
+        expiration_date=expiration_date,
+        quantity=quantity,
+        user_id=user_id
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
     return frequency
+
+@router.get("/replenishment-logs/{store_id}/{product_id}", response_model=List[schemas.ReplenishmentLogResponse])
+def get_replenishment_logs(store_id: int, product_id: int, db: Session = Depends(database.get_db)):
+    logs = db.query(models.ReplenishmentLog).filter(
+        models.ReplenishmentLog.store_id == store_id,
+        models.ReplenishmentLog.product_id == product_id
+    ).order_by(models.ReplenishmentLog.timestamp.desc()).all()
+    return logs
 
 @router.delete("/replenishment-frequency/{product_id}/{store_id}")
 def delete_replenishment_frequency(

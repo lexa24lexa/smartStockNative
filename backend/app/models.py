@@ -103,7 +103,7 @@ class ReplenishmentLog(Base):
     batch_id = Column(Integer, ForeignKey("BATCH.batch_id"), nullable=False)
     expiration_date = Column(Date, nullable=False)
     quantity = Column(Integer, nullable=False)
-    user_id = Column(Integer, ForeignKey("USERS.user_id"), nullable=False)
+    user_id = Column(Integer, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
 class ReportEmailLog(Base):
