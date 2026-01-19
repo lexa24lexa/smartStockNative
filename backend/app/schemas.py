@@ -38,7 +38,7 @@ class AverageDailySalesPerProduct(BaseModel):
 class ReplenishmentFrequencyBase(BaseModel):
     product_id: int
     store_id: int
-    replenishment_frequency: int # Days (1-3)
+    replenishment_frequency: int
 
 class ReplenishmentFrequencyCreate(ReplenishmentFrequencyBase):
     last_replenishment_date: Optional[date] = None
@@ -51,11 +51,15 @@ class ReplenishmentFrequencyResponse(ReplenishmentFrequencyBase):
         from_attributes = True
 
 class ReplenishmentFrequencyUpdate(BaseModel):
-    replenishment_frequency: Optional[int] = None # Days (1-3)
+    replenishment_frequency: Optional[int] = None
     last_replenishment_date: Optional[date] = None
 
 class ReplenishmentRecord(BaseModel):
-    replenishment_date: Optional[date] = None # If not provided, uses today's date
+    replenishment_date: Optional[date] = None
+    user_id: int
+    batch_id: int
+    expiration_date: date
+    quantity: int
 
 class ReplenishmentItem(BaseModel):
     product_id: int
@@ -64,8 +68,8 @@ class ReplenishmentItem(BaseModel):
     replenishment_frequency: Optional[int] = None
     last_replenishment_date: Optional[date] = None
     next_replenishment_date: Optional[date] = None
-    reason: str # "Out of stock", "Frequency due", "Out of stock & Frequency due"
-    priority: str # "high" (out of stock), "medium" (frequency due), "low" (preventive)
+    reason: str
+    priority: str
     quantity: Optional[int] = None
 
     class Config:
@@ -114,3 +118,18 @@ class ReplenishmentListItemUpdate(BaseModel):
 
 class ReplenishmentListWithItems(ReplenishmentListResponse):
     items: List[ReplenishmentListItemResponse] = []
+
+class ReplenishmentLogCreate(BaseModel):
+    product_id: int
+    store_id: int
+    batch_id: int
+    expiration_date: date
+    quantity: int
+    user_id: int
+
+class ReplenishmentLogResponse(ReplenishmentLogCreate):
+    log_id: int
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
