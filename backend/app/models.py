@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, DateTime, UniqueConstraint
 from sqlalchemy.sql import func
 from .database import Base
@@ -47,8 +48,7 @@ class Stock(Base):
     store_id = Column(Integer, ForeignKey("STORE.store_id"))
     batch_id = Column(Integer, ForeignKey("BATCH.batch_id"))
     quantity = Column(Integer)
-    # FR02: Field for Minimum Required Stock Calculation (per store)
-    reorder_level = Column(Integer, default=10) 
+    reorder_level = Column(Integer, default=10)
 
 class Sale(Base):
     __tablename__ = "SALE"
@@ -70,7 +70,7 @@ class ReplenishmentFrequency(Base):
     frequency_id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("PRODUCT.product_id"), nullable=False)
     store_id = Column(Integer, ForeignKey("STORE.store_id"), nullable=False)
-    replenishment_frequency = Column(Integer, nullable=False) # Days (1-3)
+    replenishment_frequency = Column(Integer, nullable=False)  # dias (1-3)
     last_replenishment_date = Column(Date, nullable=True)
 
     __table_args__ = (UniqueConstraint('product_id', 'store_id', name='uq_product_store'),)
@@ -80,7 +80,7 @@ class ReplenishmentList(Base):
     list_id = Column(Integer, primary_key=True, index=True)
     store_id = Column(Integer, ForeignKey("STORE.store_id"), nullable=False)
     list_date = Column(Date, nullable=False)
-    status = Column(String(20), default="draft") # draft, completed, cancelled
+    status = Column(String(20), default="draft")
     created_at = Column(DateTime, server_default=func.now())
     notes = Column(String(500), nullable=True)
 
@@ -92,8 +92,19 @@ class ReplenishmentListItem(Base):
     quantity = Column(Integer, nullable=False)
     current_stock = Column(Integer, nullable=False)
     reason = Column(String(100), nullable=False)
-    priority = Column(String(20), nullable=False) # high, medium, low
+    priority = Column(String(20), nullable=False)
     notes = Column(String(500), nullable=True)
+
+class ReplenishmentLog(Base):
+    __tablename__ = "REPLENISHMENT_LOG"
+    log_id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("PRODUCT.product_id"), nullable=False)
+    store_id = Column(Integer, ForeignKey("STORE.store_id"), nullable=False)
+    batch_id = Column(Integer, ForeignKey("BATCH.batch_id"), nullable=False)
+    expiration_date = Column(Date, nullable=False)
+    quantity = Column(Integer, nullable=False)
+    user_id = Column(Integer, nullable=False)
+    timestamp = Column(DateTime, server_default=func.now())
 
 class ReportEmailLog(Base):
     __tablename__ = "REPORT_EMAIL_LOG"
@@ -103,5 +114,5 @@ class ReportEmailLog(Base):
     year = Column(Integer, nullable=False)
     month = Column(Integer, nullable=False)
     recipients = Column(String(500), nullable=False)
-    status = Column(String(30), nullable=False)  # "success" | "failed"
+    status = Column(String(30), nullable=False)
     message = Column(String(1000), nullable=True)
