@@ -133,3 +133,19 @@ class ReplenishmentLogResponse(ReplenishmentLogCreate):
 
     class Config:
         from_attributes = True
+
+class StockMovementCreate(BaseModel):
+    product_id: int
+    batch_id: int
+    quantity: int
+    origin_type: str
+    origin_id: Optional[int] = None
+    destination_type: str
+    destination_id: Optional[int] = None
+
+class StockMovementResponse(StockMovementCreate):
+    movement_id: int
+    timestamp: datetime
+
+    class Config:
+        orm_mode = True
