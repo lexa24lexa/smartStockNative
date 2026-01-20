@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput } from "react-native";
 import Layout from "../../components/ui/Layout";
+import { LabelWithTooltip } from "../../components/ui/Tooltip";
 
 function PredictionCard({
   productName,
@@ -27,6 +28,9 @@ function PredictionCard({
     <View style={styles.predictionCard}>
       <View style={styles.cardHeader}>
         <Text style={styles.productName}>{productName}</Text>
+        <LabelWithTooltip 
+        label="Stockout Prediction" 
+        metricKey="stockout_prediction"/>
         <Text style={styles.stockoutBadge}>⚠️ {predictedStockout}</Text>
       </View>
       
