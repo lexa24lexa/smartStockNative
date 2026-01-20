@@ -145,6 +145,26 @@ INSERT INTO BATCH (batch_id, product_id, batch_code, expiration_date) VALUES
 (101, 101, 'BATCH-OVERSTOCK', '2030-12-31'),
 (999, 999, 'BATCH-DANGER', DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY));
 
+INSERT INTO SALE (store_id, total_amount) VALUES (100, 10.50);
+
+INSERT INTO SALE_LINE (sale_id, batch_id, quantity, subtotal) VALUES 
+(LAST_INSERT_ID(), 100, 3, 4.50),
+(LAST_INSERT_ID(), 101, 2, 6.00);
+
+INSERT INTO REPLENISHMENT_LIST (store_id, list_date, status, notes) VALUES 
+(100, CURRENT_DATE, 'draft', 'Weekly replenishment');
+
+INSERT INTO REPLENISHMENT_LIST_ITEM (list_id, product_id, quantity, current_stock, reason, priority, notes) VALUES
+(LAST_INSERT_ID(), 100, 20, 5, 'Low stock', 'High', 'Urgent'),
+(LAST_INSERT_ID(), 101, 50, 500, 'Overstock', 'Low', 'Check storage');
+
+INSERT INTO REPLENISHMENT_LOG (product_id, store_id, batch_id, expiration_date, quantity, user_id) VALUES
+(100, 100, 100, '2030-12-31', 20, 1),
+(101, 100, 101, '2030-12-31', 50, 1);
+
+INSERT INTO REPORT_EMAIL_LOG (store_id, year, month, recipients, status, message) VALUES
+(100, 2026, 1, 'manager@supermart.com', 'sent', 'Monthly stock report');
+
 -- Stock scenarios for testing alerts
 -- 1. Low Stock (FR02): Qty (5) <= Reorder Level (10)
 INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES (100, 100, 5, 10);
@@ -158,5 +178,5 @@ INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES (100,
 -- Sample Replenishment Frequencies
 -- Format: product_id, store_id, replenishment_frequency (days: 1-3)
 INSERT INTO REPLENISHMENT_FREQUENCY (product_id, store_id, replenishment_frequency) VALUES 
-(100, 100, 1),  -- Yogurt Strawberry: replenished daily
-(999, 100, 3);  -- Expired Yogurt: replenished every 3 days
+(100, 100, 1),
+(999, 100, 3);
