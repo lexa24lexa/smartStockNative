@@ -419,10 +419,6 @@ def create_replenishment_list(
     list_data: schemas.ReplenishmentListCreate,
     db: Session = Depends(database.get_db)
 ):
-    """
-    Create a new replenishment list.
-    Can be created empty or generated from the automated daily list.
-    """
     store = db.query(models.Store).filter(models.Store.store_id == list_data.store_id).first()
     if not store:
         raise HTTPException(status_code=404, detail=f"Store with ID {list_data.store_id} not found")
@@ -445,6 +441,36 @@ def create_replenishment_list(
         notes=list_data.notes
     )
     db.add(new_list)
+    db.commit()
+    db.refresh(new_list)
+
+    for item in list_data.items:
+        stock_record = db.query(models.Stock).filter(
+            models.Stock.store_id == list_data.store_id,
+            models.Stock.batch_id == item.batch_id
+        ).first()
+
+        if stock_record:
+            stock_record.quantity += item.quantity
+        else:
+            stock_record = models.Stock(
+                store_id=list_data.store_id,
+                batch_id=item.batch_id,
+                quantity=item.quantity
+            )
+            db.add(stock_record)
+
+        movement = models.StockMovement(
+            product_id=item.product_id,
+            batch_id=item.batch_id,
+            quantity=item.quantity,
+            origin_type="Supplier",
+            origin_id=item.supplier_id,
+            destination_type="Store",
+            destination_id=list_data.store_id
+        )
+        db.add(movement)
+
     db.commit()
     db.refresh(new_list)
 

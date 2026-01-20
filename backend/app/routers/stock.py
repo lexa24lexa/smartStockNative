@@ -14,7 +14,7 @@ from reportlab.lib.units import inch
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 
-from .. import models, database
+from .. import models, database, schemas
 
 router = APIRouter()
 
@@ -307,3 +307,8 @@ def get_daily_stock_report(
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f"attachment; filename=daily_stock_report_{report_date}.xlsx"}
         )
+
+@router.get("/stock/movements/{product_id}", response_model=List[schemas.StockMovementResponse])
+def get_stock_movements(product_id: int, db: Session = Depends(database.get_db)):
+    movements = db.query(models.StockMovement).filter(models.StockMovement.product_id == product_id).all()
+    return movements

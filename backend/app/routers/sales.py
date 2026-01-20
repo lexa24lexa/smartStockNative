@@ -105,6 +105,17 @@ def create_sale(sale_input: SaleInput, db: Session = Depends(database.get_db)):
 
             stock_record.quantity -= item.quantity
 
+            movement = models.StockMovement(
+                product_id=product.product_id,
+                batch_id=batch.batch_id,
+                quantity=item.quantity,
+                origin_type="Store",
+                origin_id=new_sale.store_id,
+                destination_type="Customer",
+                destination_id=None
+            )
+            db.add(movement)
+
             batch = db.query(models.Batch).filter(models.Batch.batch_id == item.batch_id).first()
             product = db.query(models.Product).filter(models.Product.product_id == batch.product_id).first()
             
@@ -169,6 +180,18 @@ def create_sale_fifo(payload: SaleFIFOInput, db: Session = Depends(database.get_
 
                 take = min(stock.quantity, remaining)
                 stock.quantity -= take
+
+                movement = models.StockMovement(
+                    product_id=product.product_id,
+                    batch_id=batch.batch_id,
+                    quantity=take,
+                    origin_type="Store",
+                    origin_id=new_sale.store_id,
+                    destination_type="Customer",
+                    destination_id=None
+                )
+                db.add(movement)
+
                 remaining -= take
 
                 subtotal = float(product.unit_price) * take
