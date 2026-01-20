@@ -116,3 +116,15 @@ class ReportEmailLog(Base):
     recipients = Column(String(500), nullable=False)
     status = Column(String(30), nullable=False)
     message = Column(String(1000), nullable=True)
+
+class StockMovement(Base):
+    __tablename__ = "STOCK_MOVEMENT"
+    movement_id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("PRODUCT.product_id"), nullable=False)
+    batch_id = Column(Integer, ForeignKey("BATCH.batch_id"), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    origin_type = Column(String(50), nullable=False)
+    origin_id = Column(Integer, nullable=True)
+    destination_type = Column(String(50), nullable=False)
+    destination_id = Column(Integer, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
