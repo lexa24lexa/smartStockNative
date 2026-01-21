@@ -16,6 +16,55 @@ from ..services.stock_service import StockService, FIFOService
 
 router = APIRouter()
 
+@router.get("/sales", response_model=List[schemas.SaleResponse])
+def get_all_sales(db: Session = Depends(database.get_db)):
+    sales = db.query(models.Sale).order_by(models.Sale.date.desc()).all()
+    result = []
+
+    for sale in sales:
+        sale_lines = []
+        for line in sale.sale_lines:
+            batch = line.batch
+            product = batch.product
+
+            product_response = schemas.ProductResponse(
+                product_id=product.product_id,
+                name=product.name,
+                unit_price=product.unit_price,
+                supplier_id=product.supplier_id,
+                category_id=product.category_id,
+                quantity=None,
+                facing=None
+            )
+
+            batch_response = schemas.BatchResponse(
+                batch_id=batch.batch_id,
+                product_id=batch.product_id,
+                batch_code=batch.batch_code,
+                expiration_date=batch.expiration_date,
+                product=product_response
+            )
+
+            sale_line_response = schemas.SaleLineResponse(
+                line_id=line.line_id,
+                batch_id=line.batch_id,
+                quantity=line.quantity,
+                subtotal=line.subtotal,
+                batch=batch_response
+            )
+            sale_lines.append(sale_line_response)
+
+        sale_response = schemas.SaleResponse(
+            sale_id=sale.sale_id,
+            store_id=sale.store_id,
+            total_amount=sale.total_amount,
+            date=sale.date,
+            lines=sale_lines
+        )
+        result.append(sale_response)
+
+    return result
+
 @router.post("/sales/fifo", response_model=schemas.SaleResponse)
 def create_sale_fifo(sale_input: schemas.SaleCreate, db: Session = Depends(database.get_db)):
     store = StockService.get_store(db, sale_input.store_id)

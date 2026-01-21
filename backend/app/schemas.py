@@ -23,8 +23,8 @@ class ProductCreate(ProductBase):
 
 class ProductResponse(ProductBase):
     product_id: int
-    quantity: int
-    facing: int
+    quantity: Optional[int] = None
+    facing: Optional[int] = None 
 
     class Config:
         from_attributes = True
