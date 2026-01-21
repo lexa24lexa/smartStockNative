@@ -4,6 +4,7 @@ USE retail_bd;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS REPLENISHMENT_LIST_ITEM;
 DROP TABLE IF EXISTS REPLENISHMENT_LIST;
+DROP TABLE IF EXISTS REPLENISHMENT_LOG;
 DROP TABLE IF EXISTS REPLENISHMENT_FREQUENCY;
 DROP TABLE IF EXISTS SALE_LINE;
 DROP TABLE IF EXISTS SALE;
@@ -14,8 +15,10 @@ DROP TABLE IF EXISTS STORE;
 DROP TABLE IF EXISTS SUPPLIER;
 DROP TABLE IF EXISTS CATEGORY;
 DROP TABLE IF EXISTS ADDRESS;
+DROP TABLE IF EXISTS REPORT_EMAIL_LOG;
 SET FOREIGN_KEY_CHECKS = 1;
 
+-- TABLES
 CREATE TABLE ADDRESS (
     address_id INT AUTO_INCREMENT PRIMARY KEY,
     street VARCHAR(200),
@@ -44,13 +47,17 @@ CREATE TABLE STORE (
 
 CREATE TABLE PRODUCT (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100),
+    name VARCHAR(100) UNIQUE,
     unit_price FLOAT,
     supplier_id INT,
     category_id INT,
     FOREIGN KEY (supplier_id) REFERENCES SUPPLIER(supplier_id),
     FOREIGN KEY (category_id) REFERENCES CATEGORY(category_id)
 );
+
+ALTER TABLE PRODUCT ADD UNIQUE KEY uq_product_name (name);
+
+ALTER TABLE PRODUCT ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
 
 CREATE TABLE BATCH (
     batch_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -123,40 +130,130 @@ CREATE TABLE REPLENISHMENT_LIST_ITEM (
     FOREIGN KEY (product_id) REFERENCES PRODUCT(product_id)
 );
 
--- Dummy Data
+CREATE TABLE REPLENISHMENT_LOG (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    store_id INT NOT NULL,
+    batch_id INT NOT NULL,
+    expiration_date DATE NOT NULL,
+    quantity INT NOT NULL,
+    user_id INT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES PRODUCT(product_id),
+    FOREIGN KEY (store_id) REFERENCES STORE(store_id),
+    FOREIGN KEY (batch_id) REFERENCES BATCH(batch_id)
+);
 
-INSERT INTO ADDRESS (address_id, street, city, country) VALUES 
-(1, '123 Main St', 'New York', 'USA'),
-(2, '456 Market St', 'London', 'UK');
+CREATE TABLE REPORT_EMAIL_LOG (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    store_id INT,
+    year INT NOT NULL,
+    month INT NOT NULL,
+    recipients VARCHAR(500) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    message VARCHAR(1000),
+    FOREIGN KEY (store_id) REFERENCES STORE(store_id)
+);
 
-INSERT INTO CATEGORY (category_id, category_name) VALUES (100, 'Dairy');
+-- SAMPLE DATA
 
-INSERT INTO SUPPLIER (supplier_id, name, address_id) VALUES (100, 'Best Foods Inc', 1);
+-- Addresses
+INSERT INTO ADDRESS (street, city, country) VALUES
+('123 Main St', 'New York', 'USA'),
+('456 Market St', 'London', 'UK'),
+('789 Central Ave', 'Berlin', 'Germany');
 
-INSERT INTO STORE (store_id, name, address_id) VALUES (100, 'SuperMart Center', 2);
+-- Categories
+INSERT INTO CATEGORY (category_name) VALUES
+('Dairy'),
+('Bakery'),
+('Beverages');
 
-INSERT INTO PRODUCT (product_id, name, unit_price, supplier_id, category_id) VALUES 
-(100, 'Yogurt Strawberry', 1.50, 100, 100),
-(101, 'Milk 1L', 1.20, 100, 100),
-(999, 'Expired Yogurt', 1.00, 100, 100);
+-- Suppliers
+INSERT INTO SUPPLIER (name, address_id) VALUES
+('Best Foods Inc', 1),
+('Bakery Supplies Co', 2),
+('Drinks Ltd', 3);
 
-INSERT INTO BATCH (batch_id, product_id, batch_code, expiration_date) VALUES 
-(100, 100, 'BATCH-LOW-STOCK', '2030-12-31'),
-(101, 101, 'BATCH-OVERSTOCK', '2030-12-31'),
-(999, 999, 'BATCH-DANGER', DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY));
+-- Stores
+INSERT INTO STORE (name, address_id) VALUES
+('SuperMart Center', 2),
+('Berlin Fresh', 3);
 
--- Stock scenarios for testing alerts
--- 1. Low Stock (FR02): Qty (5) <= Reorder Level (10)
-INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES (100, 100, 5, 10);
+-- Products
+INSERT INTO PRODUCT (name, unit_price, supplier_id, category_id) VALUES
+('Yogurt Strawberry', 1.50, 1, 1),
+('Milk 1L', 1.20, 1, 1),
+('Bread Whole Grain', 2.50, 2, 2),
+('Orange Juice', 3.00, 3, 3),
+('Expired Yogurt', 1.00, 1, 1);
 
--- 2. Overstock (FR17 Custom Rule): Qty (500) > 3 * Reorder Level (20)
-INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES (100, 101, 500, 20);
+-- Batches
+INSERT INTO BATCH (product_id, batch_code, expiration_date) VALUES
+(1, 'BATCH-LOW-STOCK', '2030-12-31'),
+(2, 'BATCH-OVERSTOCK', '2030-12-31'),
+(3, 'BATCH-NORMAL', '2030-12-31'),
+(4, 'BATCH-FRESH', '2030-12-31'),
+(5, 'BATCH-DANGER', DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY));
 
--- 3. Expiring (FR17): Expires tomorrow
-INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES (100, 999, 15, 5);
+-- Stock Scenarios
+INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES
+-- Low stock
+(1, 1, 5, 10),
+-- Overstock
+(1, 2, 500, 20),
+-- Normal stock
+(1, 3, 50, 20),
+-- Normal stock
+(1, 4, 100, 30),
+-- Expiring tomorrow
+(1, 5, 15, 5),
+-- Berlin Fresh store
+(2, 1, 20, 10),
+(2, 3, 10, 10);
 
--- Sample Replenishment Frequencies
--- Format: product_id, store_id, replenishment_frequency (days: 1-3)
-INSERT INTO REPLENISHMENT_FREQUENCY (product_id, store_id, replenishment_frequency) VALUES 
-(100, 100, 1),  -- Yogurt Strawberry: replenished daily
-(999, 100, 3);  -- Expired Yogurt: replenished every 3 days
+-- Replenishment Frequencies
+INSERT INTO REPLENISHMENT_FREQUENCY (product_id, store_id, replenishment_frequency) VALUES
+(1, 1, 1),
+(2, 1, 2),
+(5, 1, 3),
+(1, 2, 2),
+(3, 2, 1);
+
+-- Sales
+INSERT INTO SALE (store_id, total_amount) VALUES
+(1, 10.50),
+(1, 15.00),
+(2, 8.00);
+
+-- Sale lines
+INSERT INTO SALE_LINE (sale_id, batch_id, quantity, subtotal) VALUES
+(1, 1, 3, 4.50),
+(1, 2, 2, 6.00),
+(2, 3, 4, 10.00),
+(2, 4, 1, 5.00),
+(3, 1, 2, 3.00);
+
+-- Replenishment Lists
+INSERT INTO REPLENISHMENT_LIST (store_id, list_date, status, notes) VALUES
+(1, CURRENT_DATE, 'draft', 'Weekly replenishment'),
+(2, CURRENT_DATE, 'completed', 'Berlin replenishment');
+
+-- Replenishment List Items
+INSERT INTO REPLENISHMENT_LIST_ITEM (list_id, product_id, quantity, current_stock, reason, priority, notes) VALUES
+(1, 1, 20, 5, 'Low stock', 'High', 'Urgent'),
+(1, 2, 50, 500, 'Overstock', 'Low', 'Check storage'),
+(2, 1, 15, 20, 'Weekly replenishment', 'Medium', NULL),
+(2, 3, 5, 10, 'Normal stock', 'Low', 'Check bakery');
+
+-- Replenishment Logs
+INSERT INTO REPLENISHMENT_LOG (product_id, store_id, batch_id, expiration_date, quantity, user_id) VALUES
+(1, 1, 1, '2030-12-31', 20, 1),
+(2, 1, 2, '2030-12-31', 50, 1),
+(3, 2, 3, '2030-12-31', 5, 2);
+
+-- Report Email Logs
+INSERT INTO REPORT_EMAIL_LOG (store_id, year, month, recipients, status, message) VALUES
+(1, 2026, 1, 'manager@supermart.com', 'sent', 'Monthly stock report'),
+(2, 2026, 1, 'berlin@fresh.com', 'pending', 'Weekly replenishment report');
