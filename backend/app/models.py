@@ -62,11 +62,28 @@ class Batch(Base):
 
 class Stock(Base):
     __tablename__ = "HAS_STOCK"
+
     stock_id = Column(Integer, primary_key=True, index=True)
-    store_id = Column(Integer, ForeignKey("STORE.store_id"))
-    batch_id = Column(Integer, ForeignKey("BATCH.batch_id"))
-    quantity = Column(Integer)
-    reorder_level = Column(Integer, default=10)
+
+    store_id = Column(
+        Integer,
+        ForeignKey("STORE.store_id"),
+        nullable=False
+    )
+    batch_id = Column(
+        Integer,
+        ForeignKey("BATCH.batch_id"),
+        nullable=False
+    )
+
+    quantity = Column(Integer, nullable=False, default=0)
+    reorder_level = Column(Integer, nullable=False, default=10)
+
+    __table_args__ = (
+        CheckConstraint("quantity >= 0", name="ck_stock_quantity_non_negative"),
+        CheckConstraint("reorder_level >= 0", name="ck_stock_reorder_non_negative"),
+        UniqueConstraint("store_id", "batch_id", name="uq_store_batch"),
+    )
 
 class Sale(Base):
     __tablename__ = "SALE"

@@ -42,13 +42,46 @@ class BatchResponse(BatchBase):
     batch_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+from typing import Optional
+from pydantic import BaseModel, Field
 
 class StockBase(BaseModel):
     store_id: int
     batch_id: int
+    quantity: int = Field(..., ge=0)
+    reorder_level: int = Field(..., ge=0)
+
+class StockCreate(StockBase):
+    reorder_level: int = Field(10, ge=0)
+
+class StockUpdate(BaseModel):
+    quantity: Optional[int] = Field(None, ge=0)
+    reorder_level: Optional[int] = Field(None, ge=0)
+
+class StockOut(BaseModel):
+    stock_id: int
+    store_id: int
+    batch_id: int
     quantity: int
     reorder_level: int
+
+    class Config:
+        from_attributes = True
+
+class StockResponse(BaseModel):
+    product_name: str
+    batch_code: str
+    expiration_date: Optional[str]
+    quantity: int
+
+class BatchStockResponse(BaseModel):
+    batch_id: int
+    batch_code: str
+    expiration_date: Optional[str]
+    quantity: int
+
 
 class AverageDailySalesPerProduct(BaseModel):
     product_id: int
