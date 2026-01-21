@@ -47,10 +47,18 @@ class Product(Base):
 
 class Batch(Base):
     __tablename__ = "BATCH"
+    
     batch_id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("PRODUCT.product_id"))
-    batch_code = Column(String(50))
-    expiration_date = Column(Date)
+    product_id = Column(Integer, ForeignKey("PRODUCT.product_id"), nullable=False)
+    batch_code = Column(String(50), nullable=False)
+    expiration_date = Column(Date, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('product_id', 'batch_code', name='uq_product_batch_code'),
+    )
+
+    product = relationship("Product", back_populates="batches")
+    stocks = relationship("Stock", back_populates="batch")
 
 class Stock(Base):
     __tablename__ = "HAS_STOCK"

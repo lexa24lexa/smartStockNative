@@ -25,6 +25,25 @@ class ProductResponse(ProductBase):
     class Config:
         from_attributes = True
 
+class BatchBase(BaseModel):
+    product_id: int
+    batch_code: str
+    expiration_date: Optional[date]
+
+class BatchCreate(BatchBase):
+    pass
+
+class BatchUpdate(BaseModel):
+    product_id: Optional[int] = None
+    batch_code: Optional[str] = None
+    expiration_date: Optional[date] = None
+
+class BatchResponse(BatchBase):
+    batch_id: int
+
+    class Config:
+        orm_mode = True
+
 class StockBase(BaseModel):
     store_id: int
     batch_id: int
