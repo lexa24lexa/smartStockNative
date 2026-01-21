@@ -1,20 +1,26 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import date, datetime
 
 class ProductBase(BaseModel):
     name: str
-    unit_price: float
+    unit_price: float = Field(..., ge=0)
     supplier_id: int
     category_id: int
+
+    @field_validator("supplier_id", "category_id")
+    def validate_ids(cls, v):
+        if v <= 0:
+            raise ValueError("ID must be a positive integer")
+        return v
 
 class ProductCreate(ProductBase):
     pass
 
 class ProductResponse(ProductBase):
     product_id: int
-    quantity: int  
-    facing: int   
+    quantity: int
+    facing: int
 
     class Config:
         from_attributes = True

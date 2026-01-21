@@ -1,6 +1,7 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, DateTime, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, Integer, String, Float, ForeignKey, Date, DateTime, UniqueConstraint
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from .database import Base
 
 class Category(Base):
@@ -29,11 +30,20 @@ class Store(Base):
 
 class Product(Base):
     __tablename__ = "PRODUCT"
+    
     product_id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100))
-    unit_price = Column(Float)
-    supplier_id = Column(Integer, ForeignKey("SUPPLIER.supplier_id"))
-    category_id = Column(Integer, ForeignKey("CATEGORY.category_id"))
+    name = Column(String(100), unique=True, index=True, nullable=False)
+    unit_price = Column(Float, nullable=False)
+    supplier_id = Column(Integer, ForeignKey("SUPPLIER.supplier_id"), nullable=False)
+    category_id = Column(Integer, ForeignKey("CATEGORY.category_id"), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint('unit_price >= 0', name='check_unit_price_non_negative'),
+    )
+
+    supplier = relationship("Supplier")
+    category = relationship("Category")
 
 class Batch(Base):
     __tablename__ = "BATCH"

@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, asc, desc
 
@@ -37,11 +37,9 @@ def get_products(
         query = query.order_by(desc(models.Product.unit_price))
 
     results = query.all()
-
     response = []
     for product, total_qty in results:
         final_qty = int(total_qty or 0)
-
         response.append(
             schemas.ProductResponse(
                 product_id=product.product_id,
@@ -53,30 +51,25 @@ def get_products(
                 facing=final_qty // 10
             )
         )
-
     return response
-
-from fastapi import HTTPException, status
 
 @router.post("", response_model=schemas.ProductResponse)
 def create_product(product: schemas.ProductCreate, db: Session = Depends(database.get_db)):
-    existing = db.query(models.Product).filter(models.Product.name == product.name).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Product with name '{product.name}' already exists."
-        )
+    if db.query(models.Product).filter(models.Product.name == product.name).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Product with name '{product.name}' already exists.")
 
-    db_product = models.Product(
-        name=product.name,
-        unit_price=product.unit_price,
-        supplier_id=product.supplier_id,
-        category_id=product.category_id
-    )
+    if not db.query(models.Supplier).filter(models.Supplier.supplier_id == product.supplier_id).first():
+        raise HTTPException(status_code=400, detail="Supplier does not exist")
+
+    if not db.query(models.Category).filter(models.Category.category_id == product.category_id).first():
+        raise HTTPException(status_code=400, detail="Category does not exist")
+
+    db_product = models.Product(**product.dict())
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
-    
+
     total_qty = db.query(func.sum(models.Stock.quantity)) \
         .join(models.Batch, models.Batch.batch_id == models.Stock.batch_id) \
         .filter(models.Batch.product_id == db_product.product_id) \
@@ -98,12 +91,13 @@ def update_product(product_id: int, product: schemas.ProductCreate, db: Session 
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    existing = db.query(models.Product).filter(models.Product.name == product.name, models.Product.product_id != product_id).first()
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Another product with name '{product.name}' already exists."
-        )
+    if db.query(models.Product).filter(models.Product.name == product.name, models.Product.product_id != product_id).first():
+        raise HTTPException(status_code=400, detail=f"Another product with name '{product.name}' already exists.")
+
+    if not db.query(models.Supplier).filter(models.Supplier.supplier_id == product.supplier_id).first():
+        raise HTTPException(status_code=400, detail="Supplier does not exist")
+    if not db.query(models.Category).filter(models.Category.category_id == product.category_id).first():
+        raise HTTPException(status_code=400, detail="Category does not exist")
 
     db_product.name = product.name
     db_product.unit_price = product.unit_price
@@ -113,8 +107,6 @@ def update_product(product_id: int, product: schemas.ProductCreate, db: Session 
     db.refresh(db_product)
     return db_product
 
-from fastapi import HTTPException, status
-
 @router.delete("/{product_id}", status_code=204)
 def delete_product(product_id: int, db: Session = Depends(database.get_db)):
     db_product = db.query(models.Product).filter(models.Product.product_id == product_id).first()
@@ -123,5 +115,4 @@ def delete_product(product_id: int, db: Session = Depends(database.get_db)):
 
     db_product.is_active = False
     db.commit()
-
     return {"detail": f"Product '{db_product.name}' has been deactivated."}
