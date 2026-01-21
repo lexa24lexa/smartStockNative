@@ -47,13 +47,17 @@ CREATE TABLE STORE (
 
 CREATE TABLE PRODUCT (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100),
+    name VARCHAR(100) UNIQUE,
     unit_price FLOAT,
     supplier_id INT,
     category_id INT,
     FOREIGN KEY (supplier_id) REFERENCES SUPPLIER(supplier_id),
     FOREIGN KEY (category_id) REFERENCES CATEGORY(category_id)
 );
+
+ALTER TABLE PRODUCT ADD UNIQUE KEY uq_product_name (name);
+
+ALTER TABLE PRODUCT ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
 
 CREATE TABLE BATCH (
     batch_id INT AUTO_INCREMENT PRIMARY KEY,
