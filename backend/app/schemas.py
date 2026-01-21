@@ -1,20 +1,46 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import date, datetime
 
 class ProductBase(BaseModel):
     name: str
-    unit_price: float
+    unit_price: float = Field(..., ge=0)
     supplier_id: int
     category_id: int
+
+    @field_validator("supplier_id", "category_id")
+    def validate_ids(cls, v):
+        if v <= 0:
+            raise ValueError("ID must be a positive integer")
+        return v
 
 class ProductCreate(ProductBase):
     pass
 
 class ProductResponse(ProductBase):
     product_id: int
-    quantity: int  
-    facing: int   
+    quantity: int
+    facing: int
+
+    class Config:
+        from_attributes = True
+
+class BatchBase(BaseModel):
+    product_id: int
+    batch_code: str
+    expiration_date: Optional[date]
+
+class BatchCreate(BatchBase):
+    pass
+
+class BatchUpdate(BaseModel):
+    product_id: Optional[int] = None
+    batch_code: Optional[str] = None
+    expiration_date: Optional[date] = None
+
+class BatchResponse(BatchBase):
+    batch_id: int
+    product: Optional[ProductResponse] = None
 
     class Config:
         from_attributes = True
@@ -22,8 +48,65 @@ class ProductResponse(ProductBase):
 class StockBase(BaseModel):
     store_id: int
     batch_id: int
+    quantity: int = Field(..., ge=0)
+    reorder_level: int = Field(..., ge=0)
+
+class StockCreate(StockBase):
+    reorder_level: int = Field(10, ge=0)
+
+class StockUpdate(BaseModel):
+    quantity: Optional[int] = Field(None, ge=0)
+    reorder_level: Optional[int] = Field(None, ge=0)
+
+class StockOut(BaseModel):
+    stock_id: int
+    store_id: int
+    batch_id: int
     quantity: int
     reorder_level: int
+    batch: Optional[BatchResponse] = None
+
+    class Config:
+        from_attributes = True
+
+class StockResponse(BaseModel):
+    product_name: str
+    batch_code: str
+    expiration_date: Optional[str]
+    quantity: int
+
+class BatchStockResponse(BaseModel):
+    batch_id: int
+    batch_code: str
+    expiration_date: Optional[str]
+    quantity: int
+
+class SaleLineBase(BaseModel):
+    batch_id: int
+    quantity: int
+    subtotal: Optional[float]
+
+class SaleLineResponse(SaleLineBase):
+    line_id: int
+    batch: Optional[BatchResponse] = None
+
+    class Config:
+        from_attributes = True
+
+class SaleBase(BaseModel):
+    store_id: int
+    total_amount: Optional[float]
+
+class SaleCreate(SaleBase):
+    lines: List[SaleLineBase]
+
+class SaleResponse(SaleBase):
+    sale_id: int
+    date: datetime
+    lines: List[SaleLineResponse]
+
+    class Config:
+        from_attributes = True
 
 class AverageDailySalesPerProduct(BaseModel):
     product_id: int
@@ -59,7 +142,7 @@ class ReplenishmentRecord(BaseModel):
     user_id: int
     batch_id: int
     expiration_date: date
-    quantity: int = Field(..., gt=0, description="Quantity must be a positive integer")
+    quantity: int = Field(..., gt=0, description="Quantity must be positive")
 
 class ReplenishmentItem(BaseModel):
     product_id: int
