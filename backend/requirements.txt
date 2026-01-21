@@ -18,3 +18,5 @@ typing_extensions==4.15.0
 uvicorn==0.38.0
 reportlab==4.0.7
 openpyxl==3.1.2
+python-jose[cryptography]==3.2.0
+passlib[bcrypt]==1.7.4

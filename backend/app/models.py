@@ -5,6 +5,8 @@ from sqlalchemy import (
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .database import Base
+from sqlalchemy import Enum
+import enum
 
 class Category(Base):
     __tablename__ = "CATEGORY"
@@ -203,3 +205,20 @@ class StockMovement(Base):
 
     product = relationship("Product", back_populates="stock_movements")
     batch = relationship("Batch", back_populates="stock_movements")
+
+class UserRole(str, enum.Enum):
+    employee = "employee"
+    manager = "manager"
+
+class User(Base):
+    __tablename__ = "USER"
+    user_id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, nullable=False)
+    store_id = Column(Integer, ForeignKey("STORE.store_id"), nullable=False)
+    email = Column(String(100), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    role_id = Column(Integer, ForeignKey("USER_ROLE.role_id"), nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    store = relationship("Store")

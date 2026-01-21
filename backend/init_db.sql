@@ -16,6 +16,8 @@ DROP TABLE IF EXISTS SUPPLIER;
 DROP TABLE IF EXISTS CATEGORY;
 DROP TABLE IF EXISTS ADDRESS;
 DROP TABLE IF EXISTS REPORT_EMAIL_LOG;
+DROP TABLE IF EXISTS USER;
+DROP TABLE IF EXISTS USER_ROLE;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- TABLES
@@ -56,7 +58,6 @@ CREATE TABLE PRODUCT (
 );
 
 ALTER TABLE PRODUCT ADD UNIQUE KEY uq_product_name (name);
-
 ALTER TABLE PRODUCT ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
 
 CREATE TABLE BATCH (
@@ -153,6 +154,24 @@ CREATE TABLE REPORT_EMAIL_LOG (
     recipients VARCHAR(500) NOT NULL,
     status VARCHAR(30) NOT NULL,
     message VARCHAR(1000),
+    FOREIGN KEY (store_id) REFERENCES STORE(store_id)
+);
+
+CREATE TABLE USER_ROLE (
+    role_id INT AUTO_INCREMENT PRIMARY KEY,
+    role_name VARCHAR(50) UNIQUE NOT NULL
+);
+
+CREATE TABLE USER (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role_id INT NOT NULL,
+    store_id INT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    FOREIGN KEY (role_id) REFERENCES USER_ROLE(role_id),
     FOREIGN KEY (store_id) REFERENCES STORE(store_id)
 );
 
@@ -257,3 +276,13 @@ INSERT INTO REPLENISHMENT_LOG (product_id, store_id, batch_id, expiration_date, 
 INSERT INTO REPORT_EMAIL_LOG (store_id, year, month, recipients, status, message) VALUES
 (1, 2026, 1, 'manager@supermart.com', 'sent', 'Monthly stock report'),
 (2, 2026, 1, 'berlin@fresh.com', 'pending', 'Weekly replenishment report');
+
+-- Roles
+INSERT INTO USER_ROLE (role_name) VALUES
+('employee'),
+('manager');
+
+-- Users
+INSERT INTO USER (username, email, password_hash, role_id, store_id, is_active) VALUES
+('john_employee', 'john@supermart.com', 'HASHED_PASSWORD_EMPLOYEE', 1, 1, 1),
+('anna_manager', 'anna@berlinfresh.com', 'HASHED_PASSWORD_MANAGER', 2, 2, 1);

@@ -1,6 +1,10 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import date, datetime
+from pydantic import EmailStr
+from enum import Enum
+
+from .models import UserRole
 
 class ProductBase(BaseModel):
     name: str
@@ -229,6 +233,17 @@ class StockMovementCreate(BaseModel):
 class StockMovementResponse(StockMovementCreate):
     movement_id: int
     timestamp: datetime
+
+    class Config:
+        from_attributes = True
+        
+class UserOut(BaseModel):
+    user_id: int
+    username: str
+    email: str
+    role_id: int
+    store_id: int
+    is_active: bool
 
     class Config:
         from_attributes = True
