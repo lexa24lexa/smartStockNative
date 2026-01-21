@@ -120,6 +120,33 @@ def delete_replenishment_frequency(product_id: int, store_id: int, db: Session =
     db.commit()
     return {"message": f"Replenishment frequency for product {product_id} at store {store_id} deleted"}
 
+def validate_replenishment_log(db: Session, log: schemas.ReplenishmentLogCreate):
+    if log.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than 0")
+    batch = db.query(models.Batch).filter(models.Batch.batch_id == log.batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    if log.expiration_date < date.today() or log.expiration_date < batch.creation_date:
+        raise HTTPException(status_code=400, detail="Expiration date is invalid")
+    product = db.query(models.Product).filter(models.Product.product_id == log.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    store = db.query(models.Store).filter(models.Store.store_id == log.store_id).first()
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+    user = db.query(models.User).filter(models.User.user_id == log.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+@router.post("/replenishment-logs/", response_model=schemas.ReplenishmentLogResponse)
+def create_replenishment_log(log: schemas.ReplenishmentLogCreate, db: Session = Depends(database.get_db)):
+    validate_replenishment_log(db, log)
+    db_log = models.ReplenishmentLog(**log.dict())
+    db.add(db_log)
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
 @router.get("/replenishment-logs/{store_id}/{product_id}", response_model=List[schemas.ReplenishmentLogResponse])
 def get_replenishment_logs(store_id: int, product_id: int, db: Session = Depends(database.get_db)):
     logs = db.query(models.ReplenishmentLog).filter(
@@ -127,6 +154,27 @@ def get_replenishment_logs(store_id: int, product_id: int, db: Session = Depends
         models.ReplenishmentLog.product_id == product_id
     ).order_by(models.ReplenishmentLog.timestamp.desc()).all()
     return logs
+
+@router.put("/replenishment-logs/{log_id}", response_model=schemas.ReplenishmentLogResponse)
+def update_replenishment_log(log_id: int, log: schemas.ReplenishmentLogCreate, db: Session = Depends(database.get_db)):
+    db_log = db.query(models.ReplenishmentLog).filter(models.ReplenishmentLog.log_id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="Log not found")
+    validate_replenishment_log(db, log)
+    for key, value in log.dict().items():
+        setattr(db_log, key, value)
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
+@router.delete("/replenishment-logs/{log_id}")
+def delete_replenishment_log(log_id: int, db: Session = Depends(database.get_db)):
+    db_log = db.query(models.ReplenishmentLog).filter(models.ReplenishmentLog.log_id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="Log not found")
+    db.delete(db_log)
+    db.commit()
+    return {"detail": "Replenishment log deleted"}
 
 @router.delete("/replenishment-frequency/{product_id}/{store_id}")
 def delete_replenishment_frequency(
