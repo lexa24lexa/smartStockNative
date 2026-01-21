@@ -1,6 +1,11 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Layout from "../../components/ui/Layout";
+
+type CategoryStock = {
+  category: string;
+  total_stock: number;
+};
 
 function StatCard({
   value,
@@ -20,45 +25,99 @@ function StatCard({
 }
 
 export default function Dashboard() {
+  const [categories, setCategories] = useState<CategoryStock[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/analytics/stock-by-category")
+      .then((res) => res.json())
+      .then(setCategories)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  // 🔢 Derived metrics (frontend logic)
+  const stats = useMemo(() => {
+    const total = categories.length;
+    const withStock = categories.filter((c) => c.total_stock > 0).length;
+    const outOfStock = categories.filter((c) => c.total_stock === 0).length;
+
+    const availability =
+      total > 0 ? Math.round((withStock / total) * 100) : 0;
+
+    return {
+      availability,
+      outOfStock,
+      predictedRestocks: outOfStock, // proxy honesto
+      activeCategories: total,
+    };
+  }, [categories]);
+
   return (
     <Layout>
       <Text style={styles.title}>Dashboard</Text>
-      <Text style={styles.subtitle}>Updated 5min ago</Text>
+      <Text style={styles.subtitle}>
+        {loading ? "Loading data…" : "Updated just now"}
+      </Text>
 
+      {/* Stats */}
       <View style={styles.grid}>
-        <StatCard value="92%" label="Stock availability" color="#059669" />
-        <StatCard value="34" label="Out of stock" color="#DC2626" />
-        <StatCard value="120" label="Predicted Restocks" color="#2563EB" />
-        <StatCard value="15" label="Stores connected" color="#1E40AF" />
+        <StatCard
+          value={`${stats.availability}%`}
+          label="Stock availability"
+          color="#059669"
+        />
+        <StatCard
+          value={`${stats.outOfStock}`}
+          label="Out of stock categories"
+          color="#DC2626"
+        />
+        <StatCard
+          value={`${stats.predictedRestocks}`}
+          label="Predicted restocks"
+          color="#2563EB"
+        />
+        <StatCard
+          value={`${stats.activeCategories}`}
+          label="Active categories"
+          color="#1E40AF"
+        />
       </View>
 
+      {/* Chart */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Stock vs Sales Trend</Text>
+        <Text style={styles.sectionTitle}>
+          Stock vs Sales by Category
+        </Text>
+
         <View style={styles.chartPlaceholder}>
-          <Text style={styles.chartText}>Chart placeholder</Text>
+          <Text style={styles.chartText}>
+            Bar chart (categories)
+          </Text>
         </View>
       </View>
 
+      {/* Low stock (demo / placeholder) */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Stores with Low Stock</Text>
 
-        <View style={styles.storeRow}>
-          <Text>⚠️ Traugutta</Text>
-          <View style={styles.redBar} />
-        </View>
-
-        <View style={styles.storeRow}>
-          <Text>⚠️ Grunwaldzki</Text>
-          <View style={styles.greenBar} />
-        </View>
+        <Text style={styles.chartText}>
+          Data not available with current backend
+        </Text>
       </View>
     </Layout>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "bold" },
-  subtitle: { color: "#6B7280", marginBottom: 16 },
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+  },
+  subtitle: {
+    color: "#6B7280",
+    marginBottom: 16,
+  },
 
   grid: {
     flexDirection: "row",
@@ -99,24 +158,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  chartText: { color: "#6B7280" },
-
-  storeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginVertical: 8,
-  },
-  redBar: {
-    width: 80,
-    height: 6,
-    backgroundColor: "#DC2626",
-    borderRadius: 3,
-  },
-  greenBar: {
-    width: 80,
-    height: 6,
-    backgroundColor: "#059669",
-    borderRadius: 3,
+  chartText: {
+    color: "#6B7280",
   },
 });
