@@ -4,14 +4,11 @@ from sqlalchemy import func
 from typing import Optional
 from datetime import datetime, timedelta
 import random
-
 from app import models, database
 
-router = APIRouter(
-    prefix="/analytics",
-    tags=["Analytics"]
-)
+router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
+# Report: total stock vs total sales per category, optional date/category filter
 @router.get("/stock-vs-sales")
 def get_stock_vs_sales(
     db: Session = Depends(database.get_db),
@@ -19,8 +16,6 @@ def get_stock_vs_sales(
     end_date: Optional[datetime] = None,
     category_id: Optional[int] = None
 ):
-    """Get stock vs sales report, optionally filtered by date range and category."""
-
     stock_query = db.query(
         models.Category.category_name,
         func.sum(models.Stock.quantity).label("total_stock")
@@ -43,23 +38,17 @@ def get_stock_vs_sales(
 
     if category_id:
         sales_query = sales_query.filter(models.Category.category_id == category_id)
-
     if start_date:
         sales_query = sales_query.filter(models.Sale.date >= start_date)
-
     if end_date:
         sales_query = sales_query.filter(models.Sale.date <= end_date)
 
     sales_results = sales_query.group_by(models.Category.category_name).all()
 
+    # Merge stock and sales data
     report = {}
     for cat_name, qty in stock_results:
-        report[cat_name] = {
-            "category": cat_name,
-            "stock": int(qty) if qty else 0,
-            "sales": 0
-        }
-
+        report[cat_name] = {"category": cat_name, "stock": int(qty) if qty else 0, "sales": 0}
     for cat_name, qty in sales_results:
         if cat_name not in report:
             report[cat_name] = {"category": cat_name, "stock": 0, "sales": 0}
@@ -67,10 +56,9 @@ def get_stock_vs_sales(
 
     return list(report.values())
 
+# Get total stock grouped by category
 @router.get("/stock-by-category")
 def get_stock_by_category(db: Session = Depends(database.get_db)):
-    """Get total stock by category."""
-
     results = (
         db.query(
             models.Category.category_name,
@@ -82,21 +70,11 @@ def get_stock_by_category(db: Session = Depends(database.get_db)):
         .group_by(models.Category.category_name)
         .all()
     )
+    return [{"category": category_name, "total_stock": total_stock or 0} for category_name, total_stock in results]
 
-    return [
-        {
-            "category": category_name,
-            "total_stock": total_stock or 0
-        }
-        for category_name, total_stock in results
-    ]
-
+# Generate fake sales data for testing reports
 @router.post("/generate-fake-sales")
 def generate_fake_sales(db: Session = Depends(database.get_db)):
-    """
-    Generates fake sales data with different dates to test analytics and reports.
-    Creates 3 sales, each with up to 5 batches, random quantities.
-    """
     batches = db.query(models.Batch).limit(5).all()
     if not batches:
         return {"error": "No batches found. Please create stock first."}
@@ -111,11 +89,7 @@ def generate_fake_sales(db: Session = Depends(database.get_db)):
 
         for batch in batches:
             qty = random.randint(1, 50)
-            line = models.SaleLine(
-                sale_id=new_sale.sale_id,
-                batch_id=batch.batch_id,
-                quantity=qty
-            )
+            line = models.SaleLine(sale_id=new_sale.sale_id, batch_id=batch.batch_id, quantity=qty)
             db.add(line)
 
         created_count += 1

@@ -5,14 +5,15 @@ from sqlalchemy import (
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .database import Base
-import enum
 
+# Category table
 class Category(Base):
     __tablename__ = "CATEGORY"
     category_id = Column(Integer, primary_key=True, index=True)
     category_name = Column(String(100), nullable=False)
     products = relationship("Product", back_populates="category")
 
+# Address table
 class Address(Base):
     __tablename__ = "ADDRESS"
     address_id = Column(Integer, primary_key=True, index=True)
@@ -22,6 +23,7 @@ class Address(Base):
     suppliers = relationship("Supplier", back_populates="address")
     stores = relationship("Store", back_populates="address")
 
+# Supplier table
 class Supplier(Base):
     __tablename__ = "SUPPLIER"
     supplier_id = Column(Integer, primary_key=True, index=True)
@@ -30,6 +32,7 @@ class Supplier(Base):
     address = relationship("Address", back_populates="suppliers")
     products = relationship("Product", back_populates="supplier")
 
+# Store table
 class Store(Base):
     __tablename__ = "STORE"
     store_id = Column(Integer, primary_key=True, index=True)
@@ -43,6 +46,7 @@ class Store(Base):
     replenishment_logs = relationship("ReplenishmentLog", back_populates="store")
     report_logs = relationship("ReportEmailLog", back_populates="store")
 
+# Product table
 class Product(Base):
     __tablename__ = "PRODUCT"
     product_id = Column(Integer, primary_key=True, index=True)
@@ -62,6 +66,7 @@ class Product(Base):
     replenishment_list_items = relationship("ReplenishmentListItem", back_populates="product")
     replenishment_logs = relationship("ReplenishmentLog", back_populates="product")
 
+# Batch table
 class Batch(Base):
     __tablename__ = "BATCH"
     batch_id = Column(Integer, primary_key=True, index=True)
@@ -77,6 +82,7 @@ class Batch(Base):
     stock_movements = relationship("StockMovement", back_populates="batch")
     replenishment_logs = relationship("ReplenishmentLog", back_populates="batch")
 
+# Stock table
 class Stock(Base):
     __tablename__ = "HAS_STOCK"
     stock_id = Column(Integer, primary_key=True, index=True)
@@ -92,6 +98,7 @@ class Stock(Base):
         UniqueConstraint("store_id", "batch_id", name="uq_store_batch_stock"),
     )
 
+# Sale table
 class Sale(Base):
     __tablename__ = "SALE"
     sale_id = Column(Integer, primary_key=True, index=True)
@@ -101,6 +108,7 @@ class Sale(Base):
     store = relationship("Store", back_populates="sales")
     sale_lines = relationship("SaleLine", back_populates="sale")
 
+# SaleLine table
 class SaleLine(Base):
     __tablename__ = "SALE_LINE"
     line_id = Column(Integer, primary_key=True, index=True)
@@ -111,6 +119,7 @@ class SaleLine(Base):
     sale = relationship("Sale", back_populates="sale_lines")
     batch = relationship("Batch", back_populates="sale_lines")
 
+# Replenishment frequency table
 class ReplenishmentFrequency(Base):
     __tablename__ = "REPLENISHMENT_FREQUENCY"
     frequency_id = Column(Integer, primary_key=True, index=True)
@@ -122,6 +131,7 @@ class ReplenishmentFrequency(Base):
     product = relationship("Product", back_populates="replenishment_frequencies")
     store = relationship("Store", back_populates="replenishment_frequencies")
 
+# Replenishment list table
 class ReplenishmentList(Base):
     __tablename__ = "REPLENISHMENT_LIST"
     list_id = Column(Integer, primary_key=True, index=True)
@@ -133,6 +143,7 @@ class ReplenishmentList(Base):
     store = relationship("Store", back_populates="replenishment_lists")
     items = relationship("ReplenishmentListItem", back_populates="replenishment_list")
 
+# Replenishment list items table
 class ReplenishmentListItem(Base):
     __tablename__ = "REPLENISHMENT_LIST_ITEM"
     item_id = Column(Integer, primary_key=True, index=True)
@@ -146,6 +157,7 @@ class ReplenishmentListItem(Base):
     replenishment_list = relationship("ReplenishmentList", back_populates="items")
     product = relationship("Product", back_populates="replenishment_list_items")
 
+# Replenishment logs table
 class ReplenishmentLog(Base):
     __tablename__ = "REPLENISHMENT_LOG"
     log_id = Column(Integer, primary_key=True, index=True)
@@ -160,6 +172,7 @@ class ReplenishmentLog(Base):
     store = relationship("Store", back_populates="replenishment_logs")
     batch = relationship("Batch", back_populates="replenishment_logs")
 
+# Report email log table
 class ReportEmailLog(Base):
     __tablename__ = "REPORT_EMAIL_LOG"
     id = Column(Integer, primary_key=True, index=True)
@@ -172,6 +185,7 @@ class ReportEmailLog(Base):
     message = Column(String(1000), nullable=True)
     store = relationship("Store", back_populates="report_logs")
 
+# Stock movement table
 class StockMovement(Base):
     __tablename__ = "STOCK_MOVEMENT"
     movement_id = Column(Integer, primary_key=True, index=True)
@@ -186,10 +200,7 @@ class StockMovement(Base):
     product = relationship("Product", back_populates="stock_movements")
     batch = relationship("Batch", back_populates="stock_movements")
 
-class UserRole(str, enum.Enum):
-    employee = "employee"
-    manager = "manager"
-
+# User table
 class User(Base):
     __tablename__ = "USER"
     user_id = Column(Integer, primary_key=True, index=True)

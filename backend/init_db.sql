@@ -3,6 +3,7 @@ USE retail_bd;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS STOCK_MOVEMENT;
 DROP TABLE IF EXISTS REPLENISHMENT_LIST_ITEM;
 DROP TABLE IF EXISTS REPLENISHMENT_LIST;
 DROP TABLE IF EXISTS REPLENISHMENT_LOG;
@@ -22,6 +23,9 @@ DROP TABLE IF EXISTS USER_ROLE;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
+-- Tables creation
+
+-- Address table
 CREATE TABLE ADDRESS (
     address_id INT AUTO_INCREMENT PRIMARY KEY,
     street VARCHAR(200),
@@ -29,11 +33,13 @@ CREATE TABLE ADDRESS (
     country VARCHAR(100)
 );
 
+-- Product categories
 CREATE TABLE CATEGORY (
     category_id INT AUTO_INCREMENT PRIMARY KEY,
     category_name VARCHAR(100) NOT NULL
 );
 
+-- Suppliers
 CREATE TABLE SUPPLIER (
     supplier_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -41,6 +47,7 @@ CREATE TABLE SUPPLIER (
     FOREIGN KEY (address_id) REFERENCES ADDRESS(address_id)
 );
 
+-- Stores
 CREATE TABLE STORE (
     store_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -48,6 +55,7 @@ CREATE TABLE STORE (
     FOREIGN KEY (address_id) REFERENCES ADDRESS(address_id)
 );
 
+-- Products with supplier and category
 CREATE TABLE PRODUCT (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
@@ -59,6 +67,7 @@ CREATE TABLE PRODUCT (
     FOREIGN KEY (category_id) REFERENCES CATEGORY(category_id)
 );
 
+-- Product batches
 CREATE TABLE BATCH (
     batch_id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
@@ -68,6 +77,7 @@ CREATE TABLE BATCH (
     FOREIGN KEY (product_id) REFERENCES PRODUCT(product_id)
 );
 
+-- Stock per store
 CREATE TABLE HAS_STOCK (
     stock_id INT AUTO_INCREMENT PRIMARY KEY,
     store_id INT NOT NULL,
@@ -79,6 +89,7 @@ CREATE TABLE HAS_STOCK (
     FOREIGN KEY (batch_id) REFERENCES BATCH(batch_id)
 );
 
+-- Sales
 CREATE TABLE SALE (
     sale_id INT AUTO_INCREMENT PRIMARY KEY,
     date DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -87,6 +98,7 @@ CREATE TABLE SALE (
     FOREIGN KEY (store_id) REFERENCES STORE(store_id)
 );
 
+-- Sale lines
 CREATE TABLE SALE_LINE (
     line_id INT AUTO_INCREMENT PRIMARY KEY,
     sale_id INT,
@@ -97,6 +109,7 @@ CREATE TABLE SALE_LINE (
     FOREIGN KEY (batch_id) REFERENCES BATCH(batch_id)
 );
 
+-- Replenishment frequency per product/store
 CREATE TABLE REPLENISHMENT_FREQUENCY (
     frequency_id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
@@ -108,6 +121,7 @@ CREATE TABLE REPLENISHMENT_FREQUENCY (
     FOREIGN KEY (store_id) REFERENCES STORE(store_id)
 );
 
+-- Replenishment lists
 CREATE TABLE REPLENISHMENT_LIST (
     list_id INT AUTO_INCREMENT PRIMARY KEY,
     store_id INT NOT NULL,
@@ -118,6 +132,7 @@ CREATE TABLE REPLENISHMENT_LIST (
     FOREIGN KEY (store_id) REFERENCES STORE(store_id)
 );
 
+-- Items in replenishment lists
 CREATE TABLE REPLENISHMENT_LIST_ITEM (
     item_id INT AUTO_INCREMENT PRIMARY KEY,
     list_id INT NOT NULL,
@@ -131,6 +146,7 @@ CREATE TABLE REPLENISHMENT_LIST_ITEM (
     FOREIGN KEY (product_id) REFERENCES PRODUCT(product_id)
 );
 
+-- Replenishment logs
 CREATE TABLE REPLENISHMENT_LOG (
     log_id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
@@ -145,6 +161,7 @@ CREATE TABLE REPLENISHMENT_LOG (
     FOREIGN KEY (batch_id) REFERENCES BATCH(batch_id)
 );
 
+-- Report email logs
 CREATE TABLE REPORT_EMAIL_LOG (
     id INT AUTO_INCREMENT PRIMARY KEY,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -157,11 +174,13 @@ CREATE TABLE REPORT_EMAIL_LOG (
     FOREIGN KEY (store_id) REFERENCES STORE(store_id)
 );
 
+-- User roles
 CREATE TABLE USER_ROLE (
     role_id INT AUTO_INCREMENT PRIMARY KEY,
     role_name VARCHAR(50) UNIQUE NOT NULL
 );
 
+-- Users
 CREATE TABLE USER (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) UNIQUE NOT NULL,
@@ -175,6 +194,7 @@ CREATE TABLE USER (
     FOREIGN KEY (store_id) REFERENCES STORE(store_id)
 );
 
+-- Stock movements
 CREATE TABLE STOCK_MOVEMENT (
     movement_id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
@@ -190,7 +210,6 @@ CREATE TABLE STOCK_MOVEMENT (
 );
 
 -- Sample data
-USE retail_bd;
 
 -- Addresses
 INSERT INTO ADDRESS (street, city, country) VALUES
@@ -233,15 +252,15 @@ INSERT INTO BATCH (product_id, batch_code, expiration_date) VALUES
 
 -- Stock
 INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES
-(1, 1, 5, 10),     -- Low stock
-(1, 2, 500, 20),   -- Overstock
-(1, 3, 50, 20),    -- Normal stock
-(1, 4, 100, 30),   -- Normal stock
-(1, 5, 15, 5),     -- Expiring tomorrow
+(1, 1, 5, 10),
+(1, 2, 500, 20),
+(1, 3, 50, 20),
+(1, 4, 100, 30),
+(1, 5, 15, 5),
 (2, 1, 20, 10),
 (2, 3, 10, 10);
 
--- Replenishment Frequencies
+-- Replenishment frequency
 INSERT INTO REPLENISHMENT_FREQUENCY (product_id, store_id, replenishment_frequency, last_replenishment_date) VALUES
 (1, 1, 1, NULL),
 (2, 1, 2, NULL),
@@ -263,30 +282,30 @@ INSERT INTO SALE_LINE (sale_id, batch_id, quantity, subtotal) VALUES
 (2, 4, 1, 5.00),
 (3, 1, 2, 3.00);
 
--- Replenishment Lists
+-- Replenishment lists
 INSERT INTO REPLENISHMENT_LIST (store_id, list_date, status, notes) VALUES
 (1, CURRENT_DATE, 'draft', 'Weekly replenishment'),
 (2, CURRENT_DATE, 'completed', 'Berlin replenishment');
 
--- Replenishment List Items
+-- Replenishment list items
 INSERT INTO REPLENISHMENT_LIST_ITEM (list_id, product_id, quantity, current_stock, reason, priority, notes) VALUES
 (1, 1, 20, 5, 'Low stock', 'High', 'Urgent'),
 (1, 2, 50, 500, 'Overstock', 'Low', 'Check storage'),
 (2, 1, 15, 20, 'Weekly replenishment', 'Medium', NULL),
 (2, 3, 5, 10, 'Normal stock', 'Low', 'Check bakery');
 
--- Replenishment Logs
+-- Replenishment logs
 INSERT INTO REPLENISHMENT_LOG (product_id, store_id, batch_id, expiration_date, quantity, user_id) VALUES
 (1, 1, 1, '2030-12-31', 20, 1),
 (2, 1, 2, '2030-12-31', 50, 1),
 (3, 2, 3, '2030-12-31', 5, 2);
 
--- Report Email Logs
+-- Report email logs
 INSERT INTO REPORT_EMAIL_LOG (store_id, year, month, recipients, status, message) VALUES
 (1, 2026, 1, 'manager@supermart.com', 'sent', 'Monthly stock report'),
 (2, 2026, 1, 'berlin@fresh.com', 'pending', 'Weekly replenishment report');
 
--- Roles
+-- User roles
 INSERT INTO USER_ROLE (role_name) VALUES
 ('employee'),
 ('manager');
