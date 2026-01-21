@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, EmailStr
 from typing import Optional, List
 from datetime import date, datetime
 
+# Product Models
 class ProductBase(BaseModel):
     name: str
     unit_price: float = Field(..., ge=0)
@@ -19,11 +20,13 @@ class ProductCreate(ProductBase):
 
 class ProductResponse(ProductBase):
     product_id: int
-    quantity: int
-    facing: int
+    quantity: Optional[int] = None
+    facing: Optional[int] = None
 
     class Config:
         from_attributes = True
+
+# Batch Models
 
 class BatchBase(BaseModel):
     product_id: int
@@ -45,6 +48,7 @@ class BatchResponse(BatchBase):
     class Config:
         from_attributes = True
 
+# Stock Models
 class StockBase(BaseModel):
     store_id: int
     batch_id: int
@@ -81,6 +85,7 @@ class BatchStockResponse(BaseModel):
     expiration_date: Optional[str]
     quantity: int
 
+# Sale Models
 class SaleLineBase(BaseModel):
     batch_id: int
     quantity: int
@@ -108,6 +113,8 @@ class SaleResponse(SaleBase):
     class Config:
         from_attributes = True
 
+# Sales Analytics
+
 class AverageDailySalesPerProduct(BaseModel):
     product_id: int
     product_name: str
@@ -117,6 +124,8 @@ class AverageDailySalesPerProduct(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Replenishment Models
 
 class ReplenishmentFrequencyBase(BaseModel):
     product_id: int
@@ -158,6 +167,7 @@ class ReplenishmentItem(BaseModel):
     class Config:
         from_attributes = True
 
+# Replenishment List Models
 class ReplenishmentListBase(BaseModel):
     store_id: int
     list_date: date
@@ -202,6 +212,7 @@ class ReplenishmentListItemUpdate(BaseModel):
 class ReplenishmentListWithItems(ReplenishmentListResponse):
     items: List[ReplenishmentListItemResponse] = []
 
+# Replenishment Logs
 class ReplenishmentLogCreate(BaseModel):
     product_id: int
     store_id: int
@@ -217,6 +228,7 @@ class ReplenishmentLogResponse(ReplenishmentLogCreate):
     class Config:
         from_attributes = True
 
+# Stock Movement Models
 class StockMovementCreate(BaseModel):
     product_id: int
     batch_id: int
@@ -229,6 +241,18 @@ class StockMovementCreate(BaseModel):
 class StockMovementResponse(StockMovementCreate):
     movement_id: int
     timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+# User Models
+class UserOut(BaseModel):
+    user_id: int
+    username: str
+    email: str
+    role_id: int
+    store_id: int
+    is_active: bool
 
     class Config:
         from_attributes = True
