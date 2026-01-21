@@ -307,25 +307,18 @@ def get_daily_replenishment_list(
     return replenishment_items
 
 @router.post("/replenishment-lists", response_model=schemas.ReplenishmentListResponse)
-def create_replenishment_list(
-    list_data: schemas.ReplenishmentListCreate,
-    db: Session = Depends(database.get_db)
-):
+def create_replenishment_list(list_data: schemas.ReplenishmentListCreate, db: Session = Depends(database.get_db)):
+    if list_data.list_date < date_class.today():
+        raise HTTPException(status_code=400, detail="List date cannot be in the past")
     store = db.query(models.Store).filter(models.Store.store_id == list_data.store_id).first()
     if not store:
-        raise HTTPException(status_code=404, detail=f"Store with ID {list_data.store_id} not found")
-
+        raise HTTPException(status_code=404, detail=f"Store {list_data.store_id} not found")
     existing = db.query(models.ReplenishmentList).filter(
         models.ReplenishmentList.store_id == list_data.store_id,
         models.ReplenishmentList.list_date == list_data.list_date
     ).first()
-
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Replenishment list already exists for store {list_data.store_id} on {list_data.list_date}"
-        )
-
+        raise HTTPException(status_code=400, detail="Replenishment list already exists for this date")
     new_list = models.ReplenishmentList(
         store_id=list_data.store_id,
         list_date=list_data.list_date,
@@ -335,233 +328,32 @@ def create_replenishment_list(
     db.add(new_list)
     db.commit()
     db.refresh(new_list)
-
-    for item in list_data.items:
-        stock_record = db.query(models.Stock).filter(
-            models.Stock.store_id == list_data.store_id,
-            models.Stock.batch_id == item.batch_id
-        ).first()
-
-        if stock_record:
-            stock_record.quantity += item.quantity
-        else:
-            stock_record = models.Stock(
-                store_id=list_data.store_id,
-                batch_id=item.batch_id,
-                quantity=item.quantity
-            )
-            db.add(stock_record)
-
-        movement = models.StockMovement(
-            product_id=item.product_id,
-            batch_id=item.batch_id,
-            quantity=item.quantity,
-            origin_type="Supplier",
-            origin_id=item.supplier_id,
-            destination_type="Store",
-            destination_id=list_data.store_id
-        )
-        db.add(movement)
-
-    db.commit()
-    db.refresh(new_list)
-
     return new_list
 
-@router.post("/replenishment-lists/generate/{store_id}", response_model=schemas.ReplenishmentListWithItems)
-def generate_replenishment_list(
-    store_id: int,
-    list_date: Optional[date] = None,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Generate a new replenishment list from the automated daily list.
-    Creates the list and populates it with items from the daily replenishment calculation.
-    """
-    if list_date is None:
-        list_date = date_class.today()
-
-    store = db.query(models.Store).filter(models.Store.store_id == store_id).first()
-    if not store:
-        raise HTTPException(status_code=404, detail=f"Store with ID {store_id} not found")
-
-    existing = db.query(models.ReplenishmentList).filter(
-        models.ReplenishmentList.store_id == store_id,
-        models.ReplenishmentList.list_date == list_date
-    ).first()
-
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Replenishment list already exists for store {store_id} on {list_date}"
-        )
-
-    automated_items = get_daily_replenishment_list(store_id, db)
-
-    new_list = models.ReplenishmentList(
-        store_id=store_id,
-        list_date=list_date,
-        status="draft",
-        notes=f"Auto-generated on {date_class.today()}"
-    )
-    db.add(new_list)
-    db.commit()
-    db.refresh(new_list)
-
-    list_items = []
-    for item in automated_items:
-        list_item = models.ReplenishmentListItem(
-            list_id=new_list.list_id,
-            product_id=item.product_id,
-            quantity=item.quantity or 0,
-            current_stock=item.current_stock,
-            reason=item.reason,
-            priority=item.priority,
-            notes=None
-        )
-        db.add(list_item)
-        list_items.append(list_item)
-
-    db.commit()
-
-    for item in list_items:
-        db.refresh(item)
-        product = db.query(models.Product).filter(models.Product.product_id == item.product_id).first()
-        if product:
-            item.product_name = product.name
-
-    return schemas.ReplenishmentListWithItems(
-        list_id=new_list.list_id,
-        store_id=new_list.store_id,
-        list_date=new_list.list_date,
-        status=new_list.status,
-        created_at=new_list.created_at,
-        notes=new_list.notes,
-        items=[
-            schemas.ReplenishmentListItemResponse(
-                item_id=item.item_id,
-                list_id=item.list_id,
-                product_id=item.product_id,
-                product_name=getattr(item, 'product_name', None),
-                quantity=item.quantity,
-                current_stock=item.current_stock,
-                reason=item.reason,
-                priority=item.priority,
-                notes=item.notes
-            )
-            for item in list_items
-        ]
-    )
-
-@router.get("/replenishment-lists", response_model=List[schemas.ReplenishmentListResponse])
-def get_replenishment_lists(
-    store_id: Optional[int] = None,
-    list_date: Optional[date] = None,
-    status: Optional[str] = None,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Get replenishment lists with optional filters.
-    """
-    query = db.query(models.ReplenishmentList)
-
-    if store_id is not None:
-        query = query.filter(models.ReplenishmentList.store_id == store_id)
-
-    if list_date is not None:
-        query = query.filter(models.ReplenishmentList.list_date == list_date)
-
-    if status is not None:
-        query = query.filter(models.ReplenishmentList.status == status)
-
-    lists = query.order_by(models.ReplenishmentList.list_date.desc()).all()
-    return lists
-
-@router.get("/replenishment-lists/{store_id}/{list_date}", response_model=schemas.ReplenishmentListWithItems)
-def get_replenishment_list(
-    store_id: int,
-    list_date: date,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Get a specific replenishment list with all its items by store and date.
-    """
-    replenishment_list = db.query(models.ReplenishmentList).filter(
-        models.ReplenishmentList.store_id == store_id,
-        models.ReplenishmentList.list_date == list_date
-    ).first()
-
-    if not replenishment_list:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Replenishment list not found for store {store_id} on {list_date}"
-        )
-
-    items = db.query(models.ReplenishmentListItem).filter(
-        models.ReplenishmentListItem.list_id == replenishment_list.list_id
-    ).all()
-
-    items_with_names = []
-    for item in items:
-        product = db.query(models.Product).filter(models.Product.product_id == item.product_id).first()
-        items_with_names.append(schemas.ReplenishmentListItemResponse(
-            item_id=item.item_id,
-            list_id=item.list_id,
-            product_id=item.product_id,
-            product_name=product.name if product else None,
-            quantity=item.quantity,
-            current_stock=item.current_stock,
-            reason=item.reason,
-            priority=item.priority,
-            notes=item.notes
-        ))
-
-    return schemas.ReplenishmentListWithItems(
-        list_id=replenishment_list.list_id,
-        store_id=replenishment_list.store_id,
-        list_date=replenishment_list.list_date,
-        status=replenishment_list.status,
-        created_at=replenishment_list.created_at,
-        notes=replenishment_list.notes,
-        items=items_with_names
-    )
-
 @router.post("/replenishment-lists/{store_id}/{list_date}/items", response_model=schemas.ReplenishmentListItemResponse)
-def add_replenishment_list_item(
-    store_id: int,
-    list_date: date,
-    item_data: schemas.ReplenishmentListItemCreate,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Add an item to a replenishment list.
-    """
+def add_replenishment_list_item(store_id: int, list_date: date_class, item_data: schemas.ReplenishmentListItemCreate, db: Session = Depends(database.get_db)):
+    if item_data.quantity < 0:
+        raise HTTPException(status_code=400, detail="Quantity cannot be negative")
     replenishment_list = db.query(models.ReplenishmentList).filter(
         models.ReplenishmentList.store_id == store_id,
         models.ReplenishmentList.list_date == list_date
     ).first()
-
     if not replenishment_list:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Replenishment list not found for store {store_id} on {list_date}"
-        )
-
+        raise HTTPException(status_code=404, detail="Replenishment list not found")
     product = db.query(models.Product).filter(models.Product.product_id == item_data.product_id).first()
     if not product:
-        raise HTTPException(status_code=404, detail=f"Product with ID {item_data.product_id} not found")
-
+        raise HTTPException(status_code=404, detail="Product not found")
+    if not item_data.reason or not item_data.priority:
+        raise HTTPException(status_code=400, detail="Reason and priority are required")
+    valid_priorities = ["High", "Medium", "Low"]
+    if item_data.priority not in valid_priorities:
+        raise HTTPException(status_code=400, detail=f"Priority must be one of {', '.join(valid_priorities)}")
     existing = db.query(models.ReplenishmentListItem).filter(
         models.ReplenishmentListItem.list_id == replenishment_list.list_id,
         models.ReplenishmentListItem.product_id == item_data.product_id
     ).first()
-
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Product {item_data.product_id} already exists in this list"
-        )
-
+        raise HTTPException(status_code=400, detail="Product already exists in this list")
     new_item = models.ReplenishmentListItem(
         list_id=replenishment_list.list_id,
         product_id=item_data.product_id,
@@ -574,7 +366,6 @@ def add_replenishment_list_item(
     db.add(new_item)
     db.commit()
     db.refresh(new_item)
-
     return schemas.ReplenishmentListItemResponse(
         item_id=new_item.item_id,
         list_id=new_item.list_id,
@@ -588,53 +379,35 @@ def add_replenishment_list_item(
     )
 
 @router.put("/replenishment-lists/{store_id}/{list_date}/items/{product_id}", response_model=schemas.ReplenishmentListItemResponse)
-def update_replenishment_list_item(
-    store_id: int,
-    list_date: date,
-    product_id: int,
-    item_update: schemas.ReplenishmentListItemUpdate,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Update an item in a replenishment list (quantity, reason, priority, notes).
-    Uses product_id to identify the item.
-    """
+def update_replenishment_list_item(store_id: int, list_date: date_class, product_id: int, item_update: schemas.ReplenishmentListItemUpdate, db: Session = Depends(database.get_db)):
     replenishment_list = db.query(models.ReplenishmentList).filter(
         models.ReplenishmentList.store_id == store_id,
         models.ReplenishmentList.list_date == list_date
     ).first()
-
     if not replenishment_list:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Replenishment list not found for store {store_id} on {list_date}"
-        )
-
+        raise HTTPException(status_code=404, detail="Replenishment list not found")
     item = db.query(models.ReplenishmentListItem).filter(
         models.ReplenishmentListItem.list_id == replenishment_list.list_id,
         models.ReplenishmentListItem.product_id == product_id
     ).first()
-
     if not item:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Product {product_id} not found in list for store {store_id} on {list_date}"
-        )
-
+        raise HTTPException(status_code=404, detail="Product not found in list")
     if item_update.quantity is not None:
+        if item_update.quantity < 0:
+            raise HTTPException(status_code=400, detail="Quantity cannot be negative")
         item.quantity = item_update.quantity
     if item_update.reason is not None:
         item.reason = item_update.reason
     if item_update.priority is not None:
+        valid_priorities = ["High", "Medium", "Low"]
+        if item_update.priority not in valid_priorities:
+            raise HTTPException(status_code=400, detail=f"Priority must be one of {', '.join(valid_priorities)}")
         item.priority = item_update.priority
     if item_update.notes is not None:
         item.notes = item_update.notes
-
     db.commit()
     db.refresh(item)
-
     product = db.query(models.Product).filter(models.Product.product_id == item.product_id).first()
-
     return schemas.ReplenishmentListItemResponse(
         item_id=item.item_id,
         list_id=item.list_id,
@@ -648,103 +421,19 @@ def update_replenishment_list_item(
     )
 
 @router.delete("/replenishment-lists/{store_id}/{list_date}/items/{product_id}")
-def delete_replenishment_list_item(
-    store_id: int,
-    list_date: date,
-    product_id: int,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Remove an item from a replenishment list.
-    Uses product_id to identify the item.
-    """
+def delete_replenishment_list_item(store_id: int, list_date: date_class, product_id: int, db: Session = Depends(database.get_db)):
     replenishment_list = db.query(models.ReplenishmentList).filter(
         models.ReplenishmentList.store_id == store_id,
         models.ReplenishmentList.list_date == list_date
     ).first()
-
     if not replenishment_list:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Replenishment list not found for store {store_id} on {list_date}"
-        )
-
+        raise HTTPException(status_code=404, detail="Replenishment list not found")
     item = db.query(models.ReplenishmentListItem).filter(
         models.ReplenishmentListItem.list_id == replenishment_list.list_id,
         models.ReplenishmentListItem.product_id == product_id
     ).first()
-
     if not item:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Product {product_id} not found in list for store {store_id} on {list_date}"
-        )
-
+        raise HTTPException(status_code=404, detail="Product not found in list")
     db.delete(item)
     db.commit()
-
-    return {"message": f"Product {product_id} removed from list for store {store_id} on {list_date}"}
-
-@router.put("/replenishment-lists/{store_id}/{list_date}", response_model=schemas.ReplenishmentListResponse)
-def update_replenishment_list(
-    store_id: int,
-    list_date: date,
-    status: Optional[str] = None,
-    notes: Optional[str] = None,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Update replenishment list status and/or notes.
-    """
-    replenishment_list = db.query(models.ReplenishmentList).filter(
-        models.ReplenishmentList.store_id == store_id,
-        models.ReplenishmentList.list_date == list_date
-    ).first()
-
-    if not replenishment_list:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Replenishment list not found for store {store_id} on {list_date}"
-        )
-
-    if status is not None:
-        valid_statuses = ["draft", "completed", "cancelled"]
-        if status not in valid_statuses:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Status must be one of: {', '.join(valid_statuses)}"
-            )
-        replenishment_list.status = status
-
-    if notes is not None:
-        replenishment_list.notes = notes
-
-    db.commit()
-    db.refresh(replenishment_list)
-
-    return replenishment_list
-
-@router.delete("/replenishment-lists/{store_id}/{list_date}")
-def delete_replenishment_list(
-    store_id: int,
-    list_date: date,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Delete a replenishment list and all its items.
-    """
-    replenishment_list = db.query(models.ReplenishmentList).filter(
-        models.ReplenishmentList.store_id == store_id,
-        models.ReplenishmentList.list_date == list_date
-    ).first()
-
-    if not replenishment_list:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Replenishment list not found for store {store_id} on {list_date}"
-        )
-
-    db.delete(replenishment_list)
-    db.commit()
-
-    return {"message": f"Replenishment list for store {store_id} on {list_date} deleted"}
+    return {"message": "Item deleted"}
