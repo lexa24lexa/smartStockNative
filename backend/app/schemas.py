@@ -85,6 +85,10 @@ class BatchStockResponse(BaseModel):
     expiration_date: Optional[str]
     quantity: int
 
+class CategoryStock(BaseModel):
+    category: str
+    total_stock: int
+
 # Sale Models
 class SaleLineBase(BaseModel):
     batch_id: int
