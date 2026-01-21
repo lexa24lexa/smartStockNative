@@ -8,208 +8,90 @@ from .. import models, database, schemas
 router = APIRouter()
 
 @router.post("/replenishment-frequency", response_model=schemas.ReplenishmentFrequencyResponse)
-def create_replenishment_frequency(
-    frequency_data: schemas.ReplenishmentFrequencyCreate,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Create or update replenishment frequency for a product at a store.
-    If a frequency already exists for this product-store combination, it will be updated.
-    """
-
+def create_replenishment_frequency(frequency_data: schemas.ReplenishmentFrequencyCreate, db: Session = Depends(database.get_db)):
     if not (1 <= frequency_data.replenishment_frequency <= 3):
-        raise HTTPException(
-            status_code=400,
-            detail="Replenishment frequency must be between 1 and 3 days"
-        )
-
-    product = db.query(models.Product).filter(
-        models.Product.product_id == frequency_data.product_id
-    ).first()
+        raise HTTPException(status_code=400, detail="Replenishment frequency must be between 1 and 3")
+    product = db.query(models.Product).filter(models.Product.product_id == frequency_data.product_id, models.Product.is_active == True).first()
     if not product:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Product with ID {frequency_data.product_id} not found"
-        )
-
-    store = db.query(models.Store).filter(
-        models.Store.store_id == frequency_data.store_id
-    ).first()
+        raise HTTPException(status_code=404, detail=f"Product {frequency_data.product_id} not found or inactive")
+    store = db.query(models.Store).filter(models.Store.store_id == frequency_data.store_id, models.Store.is_active == True).first()
     if not store:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Store with ID {frequency_data.store_id} not found"
-        )
-
+        raise HTTPException(status_code=404, detail=f"Store {frequency_data.store_id} not found or inactive")
     existing = db.query(models.ReplenishmentFrequency).filter(
         models.ReplenishmentFrequency.product_id == frequency_data.product_id,
         models.ReplenishmentFrequency.store_id == frequency_data.store_id
     ).first()
-
     if existing:
         existing.replenishment_frequency = frequency_data.replenishment_frequency
-        if frequency_data.last_replenishment_date is not None:
-            existing.last_replenishment_date = frequency_data.last_replenishment_date
+        existing.last_replenishment_date = frequency_data.last_replenishment_date or existing.last_replenishment_date
         db.commit()
         db.refresh(existing)
         return existing
-    else:
-        new_frequency = models.ReplenishmentFrequency(
-            product_id=frequency_data.product_id,
-            store_id=frequency_data.store_id,
-            replenishment_frequency=frequency_data.replenishment_frequency,
-            last_replenishment_date=frequency_data.last_replenishment_date
-        )
-        db.add(new_frequency)
-        db.commit()
-        db.refresh(new_frequency)
-        return new_frequency
+    new_frequency = models.ReplenishmentFrequency(**frequency_data.dict())
+    db.add(new_frequency)
+    db.commit()
+    db.refresh(new_frequency)
+    return new_frequency
 
 @router.get("/replenishment-frequency", response_model=List[schemas.ReplenishmentFrequencyResponse])
-def get_replenishment_frequencies(
-    store_id: int = None,
-    product_id: int = None,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Get replenishment frequencies.
-    Can filter by store_id and/or product_id.
-    """
+def get_replenishment_frequencies(store_id: Optional[int] = None, product_id: Optional[int] = None, db: Session = Depends(database.get_db)):
     query = db.query(models.ReplenishmentFrequency)
-
     if store_id is not None:
         query = query.filter(models.ReplenishmentFrequency.store_id == store_id)
-
     if product_id is not None:
         query = query.filter(models.ReplenishmentFrequency.product_id == product_id)
-
-    frequencies = query.all()
-    return frequencies
+    return query.all()
 
 @router.get("/replenishment-frequency/{product_id}/{store_id}", response_model=schemas.ReplenishmentFrequencyResponse)
-def get_replenishment_frequency(
-    product_id: int,
-    store_id: int,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Get replenishment frequency for a specific product at a specific store.
-    """
+def get_replenishment_frequency(product_id: int, store_id: int, db: Session = Depends(database.get_db)):
     frequency = db.query(models.ReplenishmentFrequency).filter(
         models.ReplenishmentFrequency.product_id == product_id,
         models.ReplenishmentFrequency.store_id == store_id
     ).first()
-
     if not frequency:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Replenishment frequency not found for product {product_id} at store {store_id}"
-        )
-
+        raise HTTPException(status_code=404, detail=f"Replenishment frequency for product {product_id} at store {store_id} not found")
     return frequency
 
 @router.put("/replenishment-frequency/{product_id}/{store_id}", response_model=schemas.ReplenishmentFrequencyResponse)
-def update_replenishment_frequency(
-    product_id: int,
-    store_id: int,
-    frequency_update: schemas.ReplenishmentFrequencyUpdate,
-    db: Session = Depends(database.get_db)
-):
-    """
-    Update replenishment frequency for a specific product at a specific store.
-    """
-
-    if frequency_update.replenishment_frequency is not None:
-        if not (1 <= frequency_update.replenishment_frequency <= 3):
-            raise HTTPException(
-                status_code=400,
-                detail="Replenishment frequency must be between 1 and 3 days"
-            )
-
+def update_replenishment_frequency(product_id: int, store_id: int, frequency_update: schemas.ReplenishmentFrequencyUpdate, db: Session = Depends(database.get_db)):
+    if frequency_update.replenishment_frequency is not None and not (1 <= frequency_update.replenishment_frequency <= 3):
+        raise HTTPException(status_code=400, detail="Replenishment frequency must be between 1 and 3")
     frequency = db.query(models.ReplenishmentFrequency).filter(
         models.ReplenishmentFrequency.product_id == product_id,
         models.ReplenishmentFrequency.store_id == store_id
     ).first()
-
     if not frequency:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Replenishment frequency not found for product {product_id} at store {store_id}"
-        )
-
+        raise HTTPException(status_code=404, detail=f"Replenishment frequency for product {product_id} at store {store_id} not found")
     if frequency_update.replenishment_frequency is not None:
         frequency.replenishment_frequency = frequency_update.replenishment_frequency
     if frequency_update.last_replenishment_date is not None:
         frequency.last_replenishment_date = frequency_update.last_replenishment_date
-
     db.commit()
     db.refresh(frequency)
-
     return frequency
 
 @router.patch("/replenishment-frequency/{product_id}/{store_id}/replenish", response_model=schemas.ReplenishmentFrequencyResponse)
-def record_replenishment(
-    product_id: int,
-    store_id: int,
-    replenishment_data: schemas.ReplenishmentRecord = Body(...),
-    db: Session = Depends(database.get_db)
-):
-    """
-    Record a replenishment for a product at a store.
-    Updates the last replenishment date and creates a replenishment log entry.
-
-    Parameters:
-    - product_id: ID of the product
-    - store_id: ID of the store
-    - replenishment_data: Replenishment details including:
-        - user_id: ID of the user performing the replenishment
-        - batch_id: ID of the batch being replenished
-        - expiration_date: Expiration date of the batch
-        - quantity: Quantity replenished (must be positive)
-        - replenishment_date: Optional date of replenishment (defaults to today)
-
-    Returns:
-    - Updated ReplenishmentFrequency object
-    """
-
+def record_replenishment(product_id: int, store_id: int, replenishment_data: schemas.ReplenishmentRecord = Body(...), db: Session = Depends(database.get_db)):
     frequency = db.query(models.ReplenishmentFrequency).filter(
         models.ReplenishmentFrequency.product_id == product_id,
         models.ReplenishmentFrequency.store_id == store_id
     ).first()
     if not frequency:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Replenishment frequency not found for product {product_id} at store {store_id}"
-        )
-
+        raise HTTPException(status_code=404, detail=f"Replenishment frequency not found for product {product_id} at store {store_id}")
     if replenishment_data.quantity <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Quantity must be a positive integer"
-        )
-
+        raise HTTPException(status_code=400, detail="Quantity must be a positive integer")
     batch = db.query(models.Batch).filter(models.Batch.batch_id == replenishment_data.batch_id).first()
     if not batch:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Batch {replenishment_data.batch_id} not found"
-        )
-
+        raise HTTPException(status_code=404, detail=f"Batch {replenishment_data.batch_id} not found")
     user = db.query(models.User).filter(models.User.user_id == replenishment_data.user_id).first()
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail=f"User {replenishment_data.user_id} not found"
-        )
-
-    replenishment_date = replenishment_data.replenishment_date or date_class.today()
-
+        raise HTTPException(status_code=404, detail=f"User {replenishment_data.user_id} not found")
+    replenishment_date = replenishment_data.replenishment_date or date.today()
     from sqlalchemy.exc import SQLAlchemyError
     try:
         with db.begin():
             frequency.last_replenishment_date = replenishment_date
             db.add(frequency)
-
             log = models.ReplenishmentLog(
                 product_id=product_id,
                 store_id=store_id,
@@ -219,14 +101,24 @@ def record_replenishment(
                 user_id=replenishment_data.user_id
             )
             db.add(log)
-
         db.refresh(frequency)
         db.refresh(log)
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
     return frequency
+
+@router.delete("/replenishment-frequency/{product_id}/{store_id}")
+def delete_replenishment_frequency(product_id: int, store_id: int, db: Session = Depends(database.get_db)):
+    frequency = db.query(models.ReplenishmentFrequency).filter(
+        models.ReplenishmentFrequency.product_id == product_id,
+        models.ReplenishmentFrequency.store_id == store_id
+    ).first()
+    if not frequency:
+        raise HTTPException(status_code=404, detail=f"Replenishment frequency for product {product_id} at store {store_id} not found")
+    db.delete(frequency)
+    db.commit()
+    return {"message": f"Replenishment frequency for product {product_id} at store {store_id} deleted"}
 
 @router.get("/replenishment-logs/{store_id}/{product_id}", response_model=List[schemas.ReplenishmentLogResponse])
 def get_replenishment_logs(store_id: int, product_id: int, db: Session = Depends(database.get_db)):
