@@ -4,12 +4,13 @@ import Header from "./Header";
 
 interface LayoutProps {
   children: ReactNode;
+  onRefresh?: () => void;
 }
 
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({ children, onRefresh }: LayoutProps) {
   return (
     <View style={styles.container}>
-      <Header />
+      <Header onRefresh={onRefresh} />
       <ScrollView style={styles.main}>{children}</ScrollView>
     </View>
   );
