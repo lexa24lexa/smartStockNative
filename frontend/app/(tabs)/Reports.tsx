@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Switch } from "react-native";
+import React from "react";
+import { StyleSheet, Text, View } from "react-native";
 import Layout from "../../components/ui/Layout";
 
 function ReportCard({
@@ -96,180 +96,119 @@ export default function Reports() {
 
   return (
     <Layout>
-      <Text style={styles.title}>Reports & History</Text>
-      <Text style={styles.subtitle}>Export reports and view traceability</Text>
+      <Text style={styles.subtitle}>Updated 10min ago</Text>
+      <Text style={styles.title}>Reports</Text>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>📧 Email Delivery</Text>
-          <Switch
-            value={emailEnabled}
-            onValueChange={setEmailEnabled}
-            trackColor={{ false: "#D1D5DB", true: "#059669" }}
-            thumbColor="#fff"
-          />
+      <View style={styles.filters}>
+        <View style={styles.filterCard}>
+          <Text style={styles.filterLabel}>Select report type</Text>
+          <Text style={styles.filterValue}>Graphic ▾</Text>
         </View>
-        {emailEnabled && (
-          <Text style={styles.emailInfo}>
-            Reports will be sent daily at 8:00 AM to admin@company.com
-          </Text>
-        )}
+
+        <View style={styles.filterCard}>
+          <Text style={styles.filterLabel}>Data range</Text>
+          <Text style={styles.filterValue}>20-01-2025</Text>
+          <Text style={styles.filterValue}>20-02-2025</Text>
+        </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Available Reports</Text>
-      <ScrollView style={styles.reportsContainer}>
-        {reports.map(report => (
-          <ReportCard
-            key={report.id}
-            title={report.title}
-            description={report.description}
-            type={report.type}
-            lastGenerated={report.lastGenerated}
-            onDownload={() => console.log(`Download ${report.title}`)}
-          />
-        ))}
-      </ScrollView>
+      <View style={styles.chartCard}>
+        <View style={styles.chartPlaceholder} />
 
-      <Text style={styles.sectionTitle}>Replenishment Traceability</Text>
-      <ScrollView style={styles.traceabilityContainer}>
-        {traceability.map(log => (
-          <TraceabilityLog
-            key={log.id}
-            action={log.action}
-            product={log.product}
-            quantity={log.quantity}
-            timestamp={log.timestamp}
-            user={log.user}
-          />
-        ))}
-      </ScrollView>
+        <View style={styles.tooltip}>
+          <Text style={styles.tooltipTitle}>Detailed Breakdown -</Text>
+          <Text style={styles.tooltipSubtitle}>August 2023</Text>
+
+          <View style={styles.tooltipRow}>
+            <Text>● Product A</Text>
+            <Text>150 units</Text>
+          </View>
+          <View style={styles.tooltipRow}>
+            <Text>● Product B</Text>
+            <Text>50 units</Text>
+          </View>
+          <View style={styles.tooltipRow}>
+            <Text>● Product C</Text>
+            <Text>75 units</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.table}>
+        <Text style={styles.tableHeader}>Date     Product     Sales Qty</Text>
+        <Text style={styles.tableRow}>—        —           —</Text>
+        <Text style={styles.tableRow}>—        —           —</Text>
+      </View>
     </Layout>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "bold" },
-  subtitle: { color: "#6B7280", marginBottom: 16 },
+  title: { fontSize: 22, fontWeight: "bold", marginBottom: 16 },
+  subtitle: { color: "#6B7280", marginBottom: 4 },
 
-  section: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
+  filters: {
+    flexDirection: "row",
+    gap: 12,
     marginBottom: 16,
   },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  emailInfo: {
-    marginTop: 8,
-    color: "#6B7280",
-    fontSize: 13,
-  },
-
-  reportsContainer: {
-    maxHeight: 280,
-    marginBottom: 16,
-  },
-
-  reportCard: {
+  filterCard: {
+    flex: 1,
     backgroundColor: "#fff",
+    padding: 12,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
   },
-  reportHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  reportTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  reportDesc: {
-    color: "#6B7280",
-    fontSize: 13,
-    marginTop: 2,
-  },
-  typeBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    height: 24,
-  },
-  dailyBadge: {
-    backgroundColor: "#DBEAFE",
-  },
-  monthlyBadge: {
-    backgroundColor: "#FEF3C7",
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  lastGenerated: {
+  filterLabel: {
     color: "#6B7280",
     fontSize: 12,
-    marginBottom: 12,
   },
-  reportActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  downloadBtn: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  downloadBtnText: {
-    fontSize: 13,
-    fontWeight: "500",
+  filterValue: {
+    marginTop: 4,
+    fontWeight: "600",
   },
 
-  traceabilityContainer: {
-    maxHeight: 240,
-  },
-
-  logEntry: {
-    flexDirection: "row",
+  chartCard: {
     backgroundColor: "#fff",
-    borderRadius: 12,
     padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  chartPlaceholder: {
+    height: 160,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 8,
+  },
+
+  tooltip: {
+    position: "absolute",
+    left: 20,
+    bottom: 20,
+    backgroundColor: "#fff",
+    padding: 12,
+    borderRadius: 10,
+    elevation: 3,
+  },
+  tooltipTitle: {
+    fontWeight: "600",
+  },
+  tooltipSubtitle: {
     marginBottom: 8,
   },
-  logIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
+  tooltipRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
-  logContent: {
-    flex: 1,
+
+  table: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 12,
   },
-  logAction: {
+  tableHeader: {
     fontWeight: "600",
-    fontSize: 14,
+    marginBottom: 8,
   },
-  logProduct: {
+  tableRow: {
     color: "#6B7280",
-    fontSize: 13,
-    marginTop: 2,
-  },
-  logMeta: {
-    color: "#9CA3AF",
-    fontSize: 11,
-    marginTop: 4,
   },
 });

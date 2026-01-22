@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput } from "react-native";
+import React from "react";
+import { StyleSheet, Text, View } from "react-native";
 import Layout from "../../components/ui/Layout";
 import { LabelWithTooltip } from "../../components/ui/Tooltip";
 
@@ -65,6 +65,40 @@ function PredictionCard({
   );
 }
 
+function InfoCard({ title, value }: { title: string; value: string }) {
+  return (
+    <View style={styles.infoCard}>
+      <Text style={styles.infoTitle}>{title}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+}
+
+function PredictionRow({
+  product,
+  value,
+  note,
+  color,
+}: {
+  product: string;
+  value: string;
+  note: string;
+  color: string;
+}) {
+  return (
+    <View style={styles.predictionRow}>
+      <View style={styles.rowLeft}>
+        <View style={[styles.dot, { backgroundColor: color }]} />
+        <Text style={styles.product}>{product}</Text>
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        <Text style={[styles.percent, { color }]}>{value}</Text>
+        <Text style={styles.meta}>{note}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function Predictions() {
   const [predictions, setPredictions] = useState([
     { id: 1, productName: "Coca Cola 500ml", currentStock: 12, predictedStockout: "In 2 days", suggestedQuantity: 48 },
@@ -80,149 +114,116 @@ export default function Predictions() {
 
   return (
     <Layout>
-      <Text style={styles.title}>Predictions & Replenishment</Text>
-      <Text style={styles.subtitle}>Automated daily replenishment suggestions</Text>
+      <Text style={styles.subtitle}>Updated 10min ago</Text>
+      <Text style={styles.title}>Predictive overview</Text>
 
-      <View style={styles.statsRow}>
-        <View style={[styles.statBox, { backgroundColor: "#DC2626" }]}>
-          <Text style={styles.statValue}>8</Text>
-          <Text style={styles.statLabel}>Stockouts predicted</Text>
-        </View>
-        <View style={[styles.statBox, { backgroundColor: "#2563EB" }]}>
-          <Text style={styles.statValue}>120</Text>
-          <Text style={styles.statLabel}>Items to restock</Text>
-        </View>
+      <View style={styles.infoGrid}>
+        <InfoCard title="Forecast accuracy" value="89%" />
+        <InfoCard title="Next restock needed" value="in 2d." />
       </View>
 
-      <ScrollView style={styles.listContainer}>
-        {predictions.map(pred => (
-          <PredictionCard
-            key={pred.id}
-            productName={pred.productName}
-            currentStock={pred.currentStock}
-            predictedStockout={pred.predictedStockout}
-            suggestedQuantity={pred.suggestedQuantity}
-            onOverride={(newQty) => handleOverride(pred.id, newQty)}
-          />
-        ))}
-      </ScrollView>
+      <View style={styles.chartCard}>
+        <View style={styles.chartPlaceholder} />
+      </View>
 
-      <TouchableOpacity style={styles.generateBtn}>
-        <Text style={styles.generateBtnText}>Generate Replenishment List</Text>
-      </TouchableOpacity>
+      <Text style={styles.sectionTitle}>Automatic predictions</Text>
+
+      <View style={styles.listCard}>
+        <PredictionRow
+          product="Product B"
+          value="-25% stock"
+          note="Restock tomorrow."
+          color="#DC2626"
+        />
+        <PredictionRow
+          product="Product C"
+          value="+5% stock"
+          note="Restock in 2 days."
+          color="#F59E0B"
+        />
+        <PredictionRow
+          product="Product D"
+          value="+45% stock"
+          note="Restock in 3.5 days."
+          color="#059669"
+        />
+      </View>
     </Layout>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "bold" },
-  subtitle: { color: "#6B7280", marginBottom: 16 },
+  title: { fontSize: 22, fontWeight: "bold", marginBottom: 16 },
+  subtitle: { color: "#6B7280", marginBottom: 4 },
 
-  statsRow: {
+  infoGrid: {
     flexDirection: "row",
     gap: 12,
     marginBottom: 16,
   },
-  statBox: {
+  infoCard: {
     flex: 1,
+    backgroundColor: "#fff",
     padding: 16,
     borderRadius: 12,
   },
-  statValue: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
+  infoTitle: {
+    color: "#6B7280",
+    fontSize: 13,
   },
-  statLabel: {
-    color: "#fff",
-    marginTop: 4,
-    fontSize: 12,
-  },
-
-  listContainer: {
-    flex: 1,
+  infoValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginTop: 6,
   },
 
-  predictionCard: {
+  chartCard: {
+    backgroundColor: "#fff",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  chartPlaceholder: {
+    height: 160,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 8,
+  },
+
+  sectionTitle: {
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+
+  listCard: {
     backgroundColor: "#fff",
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: "#DC2626",
+    gap: 16,
   },
 
-  cardHeader: {
+  predictionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
   },
-  productName: {
-    fontSize: 16,
+  rowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  product: {
     fontWeight: "600",
   },
-  stockoutBadge: {
+  percent: {
+    fontWeight: "600",
+  },
+  meta: {
     fontSize: 12,
-    color: "#DC2626",
-    fontWeight: "500",
-  },
-
-  cardBody: {
-    gap: 8,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  label: {
     color: "#6B7280",
-    fontSize: 14,
-  },
-  value: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  editable: {
-    color: "#2563EB",
-  },
-
-  editContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 6,
-    padding: 6,
-    width: 80,
-    textAlign: "center",
-  },
-  saveBtn: {
-    backgroundColor: "#059669",
-    borderRadius: 6,
-    padding: 6,
-    width: 32,
-    alignItems: "center",
-  },
-  saveBtnText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-
-  generateBtn: {
-    backgroundColor: "#059669",
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  generateBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
   },
 });
