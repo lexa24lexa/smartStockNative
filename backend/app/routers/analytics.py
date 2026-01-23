@@ -17,13 +17,19 @@ def get_stock_vs_sales(
     end_date: Optional[datetime] = None,
     category_id: Optional[int] = None
 ):
+    """
+    Returns total stock and total sales per category.
+    """
     # Total stock per category
-    stock_query = db.query(
-        models.Category.category_name,
-        func.sum(models.HAS_STOCK.quantity).label("total_stock")
-    ).join(models.Product, models.Category.category_id == models.Product.category_id)\
-     .join(models.Batch, models.Product.product_id == models.Batch.product_id)\
-     .join(models.HAS_STOCK, models.Batch.batch_id == models.HAS_STOCK.batch_id)
+    stock_query = (
+        db.query(
+            models.Category.category_name,
+            func.sum(models.Stock.quantity).label("total_stock")
+        )
+        .join(models.Product, models.Product.category_id == models.Category.category_id)
+        .join(models.Batch, models.Batch.product_id == models.Product.product_id)
+        .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)
+    )
 
     if category_id:
         stock_query = stock_query.filter(models.Category.category_id == category_id)
@@ -31,13 +37,16 @@ def get_stock_vs_sales(
     stock_results = stock_query.group_by(models.Category.category_name).all()
 
     # Total sales per category
-    sales_query = db.query(
-        models.Category.category_name,
-        func.sum(models.SaleLine.quantity).label("total_sales")
-    ).join(models.Product, models.Category.category_id == models.Product.category_id)\
-     .join(models.Batch, models.Product.product_id == models.Batch.product_id)\
-     .join(models.SaleLine, models.Batch.batch_id == models.SaleLine.batch_id)\
-     .join(models.Sale, models.SaleLine.sale_id == models.Sale.sale_id)
+    sales_query = (
+        db.query(
+            models.Category.category_name,
+            func.sum(models.SaleLine.quantity).label("total_sales")
+        )
+        .join(models.Product, models.Product.category_id == models.Category.category_id)
+        .join(models.Batch, models.Batch.product_id == models.Product.product_id)
+        .join(models.SaleLine, models.SaleLine.batch_id == models.Batch.batch_id)
+        .join(models.Sale, models.Sale.sale_id == models.SaleLine.sale_id)
+    )
 
     if category_id:
         sales_query = sales_query.filter(models.Category.category_id == category_id)
@@ -48,7 +57,7 @@ def get_stock_vs_sales(
 
     sales_results = sales_query.group_by(models.Category.category_name).all()
 
-    # Combine stock and sales
+    # Combine stock and sales results
     report = {}
     for cat_name, qty in stock_results:
         report[cat_name] = {"category": cat_name, "stock": int(qty) if qty else 0, "sales": 0}
@@ -62,20 +71,24 @@ def get_stock_vs_sales(
 # Total stock per category
 @router.get("/stock-by-category", response_model=List[schemas.CategoryStock])
 def stock_by_category(db: Session = Depends(database.get_db)):
-    results = db.query(
-    models.Category.category_name.label("category"),
-    func.sum(models.Stock.quantity).label("total_stock")
-    ).join(
-        models.Product, models.Product.category_id == models.Category.category_id
-    ).join(
-        models.Batch, models.Batch.product_id == models.Product.product_id
-    ).join(
-        models.Stock, models.Stock.batch_id == models.Batch.batch_id
-    ).group_by(models.Category.category_name).all()
+    results = (
+        db.query(
+            models.Category.category_name.label("category"),
+            func.sum(models.Stock.quantity).label("total_stock")
+        )
+        .join(models.Product, models.Product.category_id == models.Category.category_id)
+        .join(models.Batch, models.Batch.product_id == models.Product.product_id)
+        .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)
+        .group_by(models.Category.category_name)
+        .all()
+    )
 
-    return [{"category": r.category, "total_stock": int(r.total_stock) if r.total_stock else 0} for r in results]
+    return [
+        {"category": r.category, "total_stock": int(r.total_stock) if r.total_stock else 0}
+        for r in results
+    ]
 
-# Low stock items for replenishment
+# Low stock items
 @router.get("/low-stock", response_model=List[schemas.ReplenishmentItem])
 def low_stock_items(store_id: int, db: Session = Depends(database.get_db)):
     items = (
@@ -84,7 +97,6 @@ def low_stock_items(store_id: int, db: Session = Depends(database.get_db)):
             models.Product.name.label("product_name"),
             func.sum(models.Stock.quantity).label("current_stock")
         )
-        .select_from(models.Product)
         .join(models.Batch, models.Batch.product_id == models.Product.product_id)
         .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)
         .filter(models.Stock.store_id == store_id)
@@ -93,17 +105,21 @@ def low_stock_items(store_id: int, db: Session = Depends(database.get_db)):
         .all()
     )
 
-    return [{
-        "product_id": r.product_id,
-        "product_name": r.product_name,
-        "current_stock": int(r.current_stock),
-        "replenishment_frequency": None,
-        "last_replenishment_date": None,
-        "next_replenishment_date": None,
-        "reason": "Low stock",
-        "priority": "High",
-        "quantity": None
-    } for r in items]
+    return [
+        {
+            "product_id": r.product_id,
+            "product_name": r.product_name,
+            "current_stock": int(r.current_stock),
+            "replenishment_frequency": None,
+            "last_replenishment_date": None,
+            "next_replenishment_date": None,
+            "reason": "Low stock",
+            "priority": "High",
+            "quantity": None
+        }
+        for r in items
+    ]
+
 
 # Generate fake sales
 @router.post("/generate-fake-sales")
@@ -122,7 +138,11 @@ def generate_fake_sales(db: Session = Depends(database.get_db)):
 
         for batch in batches:
             qty = random.randint(1, 50)
-            line = models.SaleLine(sale_id=new_sale.sale_id, batch_id=batch.batch_id, quantity=qty)
+            line = models.SaleLine(
+                sale_id=new_sale.sale_id,
+                batch_id=batch.batch_id,
+                quantity=qty
+            )
             db.add(line)
 
         created_count += 1
