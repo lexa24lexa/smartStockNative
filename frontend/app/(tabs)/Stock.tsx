@@ -113,7 +113,7 @@ export default function Stock() {
     const load = async () => {
       try {
         const res = await fetch(
-          `http://localhost:8000/stock/overview/${STORE_ID}`
+          `http://127.0.0.1:8000/stock/overview/${STORE_ID}`
         );
 
         if (!res.ok) {
