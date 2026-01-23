@@ -1,7 +1,9 @@
 from datetime import date
 from typing import List
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from fastapi import HTTPException
+from datetime import datetime, timedelta
 
 from .. import models, schemas
 
@@ -126,6 +128,91 @@ class StockService:
             )
             for r in results
         ]
+
+    @staticmethod
+    def get_stock_overview(db: Session, store_id: int):
+        stock_rows = (
+            db.query(
+                models.Product.product_id,
+                models.Product.name,
+                func.sum(models.Stock.quantity).label("total_quantity"),
+                func.min(models.Stock.reorder_level).label("reorder_level"),
+            )
+            .join(models.Batch, models.Batch.product_id == models.Product.product_id)
+            .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)
+            .filter(models.Stock.store_id == store_id)
+            .group_by(models.Product.product_id, models.Product.name)
+            .all()
+        )
+
+        results = []
+
+        for row in stock_rows:
+            last_sale = (
+                db.query(func.max(models.Sale.date))
+                .join(models.SaleLine, models.Sale.sale_id == models.SaleLine.sale_id)
+                .join(models.Batch, models.Batch.batch_id == models.SaleLine.batch_id)
+                .filter(
+                    models.Batch.product_id == row.product_id,
+                    models.Sale.store_id == store_id,
+                )
+                .scalar()
+            )
+
+            total_sold = (
+                db.query(func.sum(models.SaleLine.quantity))
+                .join(models.Batch)
+                .join(models.Sale)
+                .filter(
+                    models.Batch.product_id == row.product_id,
+                    models.Sale.store_id == store_id,
+                )
+                .scalar()
+                or 0
+            )
+
+            days = (
+                db.query(func.count(func.distinct(func.date(models.Sale.date))))
+                .join(models.SaleLine)
+                .join(models.Batch)
+                .filter(
+                    models.Batch.product_id == row.product_id,
+                    models.Sale.store_id == store_id,
+                )
+                .scalar()
+                or 1
+            )
+
+            avg_daily_sales = total_sold / days if days else 0
+            days_to_oos = (
+                int(row.total_quantity / avg_daily_sales)
+                if avg_daily_sales > 0
+                else None
+            )
+
+            if row.total_quantity <= row.reorder_level:
+                status = "Critical"
+            elif row.total_quantity <= row.reorder_level * 2:
+                status = "Low"
+            else:
+                status = "Stable"
+
+            progress = min(row.total_quantity / (row.reorder_level * 3), 1)
+
+            results.append(
+                schemas.StockOverviewResponse(
+                    product_id=row.product_id,
+                    product_name=row.name,
+                    total_quantity=row.total_quantity,
+                    reorder_level=row.reorder_level,
+                    status=status,
+                    progress=progress,
+                    days_to_out_of_stock=days_to_oos,
+                    last_sale_at=last_sale,
+                )
+            )
+
+        return results
 
 class FIFOService:
 

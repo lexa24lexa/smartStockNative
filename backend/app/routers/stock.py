@@ -11,6 +11,11 @@ from ..reports.stock_report import generate_stock_pdf_report, generate_stock_exc
 # Stock router
 router = APIRouter(prefix="/stock", tags=["Stock"])
 
+# Get stock overview for a store
+@router.get("/overview/{store_id}", response_model=List[schemas.StockOverviewResponse])
+def get_stock_overview(store_id: int, db: Session = Depends(database.get_db)):
+    return StockService.get_stock_overview(db, store_id)
+
 # Create a new stock entry
 @router.post("", response_model=schemas.StockOut)
 def create_stock(stock_in: schemas.StockCreate, db: Session = Depends(database.get_db)):
