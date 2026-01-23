@@ -89,6 +89,18 @@ class StockOverviewResponse(BaseModel):
     days_to_out_of_stock: Optional[int]
     last_sale_at: Optional[datetime]
 
+class StockPredictionItem(BaseModel):
+    product_id: int
+    product_name: str
+    predicted_stock_change_pct: float
+    days_until_restock: Optional[int]
+
+class StockPredictionsResponse(BaseModel):
+    last_updated: datetime
+    forecast_accuracy: float
+    next_restock_in_days: Optional[int]
+    predictions: list[StockPredictionItem]
+
 class BatchStockResponse(BaseModel):
     batch_id: int
     batch_code: str

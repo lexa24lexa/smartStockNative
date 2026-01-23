@@ -1,6 +1,13 @@
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Text, View, ActivityIndicator } from "react-native";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
 import Layout from "../../components/ui/Layout";
+
+dayjs.extend(relativeTime);
+
+const API_BASE_URL = "http://127.0.0.1:8000";
+const STORE_ID = 1;
 
 function InfoCard({ title, value }: { title: string; value: string }) {
   return (
@@ -37,49 +44,125 @@ function PredictionRow({
 }
 
 export default function Predictions() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(
+      `${API_BASE_URL}/analytics/predictions?store_id=${STORE_ID}`
+    )
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load predictions");
+        return res.json();
+      })
+      .then(setData)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <Layout>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" />
+        </View>
+      </Layout>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <Layout>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>
+            {error ?? "Something went wrong"}
+          </Text>
+        </View>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
-      <Text style={styles.subtitle}>Updated 10min ago</Text>
+      <Text style={styles.subtitle}>
+        Updated {dayjs(data.last_updated).fromNow()}
+      </Text>
+
       <Text style={styles.title}>Predictive overview</Text>
 
+      {/* Info cards */}
       <View style={styles.infoGrid}>
-        <InfoCard title="Forecast accuracy" value="89%" />
-        <InfoCard title="Next restock needed" value="in 2d." />
+        <InfoCard
+          title="Forecast accuracy"
+          value={`${Math.round(data.forecast_accuracy * 100)}%`}
+        />
+        <InfoCard
+          title="Next restock needed"
+          value={
+            data.next_restock_in_days
+              ? `in ${data.next_restock_in_days}d.`
+              : "—"
+          }
+        />
       </View>
 
+      {/* Chart placeholder */}
       <View style={styles.chartCard}>
         <View style={styles.chartPlaceholder} />
       </View>
 
       <Text style={styles.sectionTitle}>Automatic predictions</Text>
 
+      {/* Predictions list */}
       <View style={styles.listCard}>
-        <PredictionRow
-          product="Product B"
-          value="-25% stock"
-          note="Restock tomorrow."
-          color="#DC2626"
-        />
-        <PredictionRow
-          product="Product C"
-          value="+5% stock"
-          note="Restock in 2 days."
-          color="#F59E0B"
-        />
-        <PredictionRow
-          product="Product D"
-          value="+45% stock"
-          note="Restock in 3.5 days."
-          color="#059669"
-        />
+        {data.predictions.map((p: any) => {
+          const color =
+            p.predicted_stock_change_pct <= -20
+              ? "#DC2626"
+              : p.predicted_stock_change_pct < 0
+              ? "#F59E0B"
+              : "#059669";
+
+          return (
+            <PredictionRow
+              key={p.product_id}
+              product={p.product_name}
+              value={`${p.predicted_stock_change_pct}% stock`}
+              note={
+                p.days_until_restock
+                  ? `Restock in ${p.days_until_restock} days.`
+                  : "No restock planned."
+              }
+              color={color}
+            />
+          );
+        })}
       </View>
     </Layout>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 16 },
-  subtitle: { color: "#6B7280", marginBottom: 4 },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorText: {
+    color: "#DC2626",
+    fontSize: 16,
+  },
+
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 16,
+  },
+  subtitle: {
+    color: "#6B7280",
+    marginBottom: 4,
+  },
 
   infoGrid: {
     flexDirection: "row",

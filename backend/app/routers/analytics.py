@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 import random
 from app import models, database, schemas
+from app.services.stock_service import StockService
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -128,3 +129,11 @@ def generate_fake_sales(db: Session = Depends(database.get_db)):
 
     db.commit()
     return {"message": f"Successfully generated {created_count} fake sales."}
+
+# Stock predictions
+@router.get("/predictions", response_model=schemas.StockPredictionsResponse)
+def get_predictions(
+    store_id: int = Query(..., gt=0),
+    db: Session = Depends(database.get_db),
+):
+    return StockService.get_stock_predictions(db, store_id)

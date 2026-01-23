@@ -1,9 +1,9 @@
-from datetime import date
+from datetime import datetime
 from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 from .. import models, schemas
 
@@ -213,6 +213,42 @@ class StockService:
             )
 
         return results
+    
+    @staticmethod
+    def get_stock_predictions(db: Session, store_id: int):
+        overview = StockService.get_stock_overview(db, store_id)
+
+        predictions = []
+        next_restock_days = []
+
+        for item in overview:
+            if item.days_to_out_of_stock is None:
+                continue
+
+            predicted_change = (
+                -100 * (7 / item.days_to_out_of_stock)
+                if item.days_to_out_of_stock > 0
+                else -100
+            )
+
+            days_until_restock = item.days_to_out_of_stock
+            next_restock_days.append(days_until_restock)
+
+            predictions.append(
+                schemas.StockPredictionItem(
+                    product_id=item.product_id,
+                    product_name=item.product_name,
+                    predicted_stock_change_pct=round(predicted_change, 1),
+                    days_until_restock=days_until_restock,
+                )
+            )
+
+        return schemas.StockPredictionsResponse(
+            last_updated=datetime.now(timezone.utc),
+            forecast_accuracy=0.89,
+            next_restock_in_days=min(next_restock_days) if next_restock_days else None,
+            predictions=predictions,
+        )
 
 class FIFOService:
 
