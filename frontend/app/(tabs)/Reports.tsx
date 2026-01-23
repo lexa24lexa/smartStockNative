@@ -4,32 +4,24 @@ import { Picker } from "@react-native-picker/picker";
 import { LineChart } from "react-native-chart-kit";
 import Layout from "../../components/ui/Layout";
 
-type TopProduct = {
-  product_id: number;
-  name: string;
-  qty_sold: number;
-  revenue: number;
-};
+// Types
+type TopProduct = { product_id: number; name: string; qty_sold: number; revenue: number };
+type Report = { sale_count: number; total_items_sold: number; total_revenue: number; top_products?: TopProduct[] };
 
-type Report = {
-  sale_count: number;
-  total_items_sold: number;
-  total_revenue: number;
-  top_products?: TopProduct[];
-};
-
+// Main Reports screen
 export default function Reports() {
-  const storeId = 1; // Replace with dynamic store if needed
+  const storeId = 1;
   const today = new Date();
 
-  const [report, setReport] = useState<Report | null>(null);
-  const [loading, setLoading] = useState(false);
+  // State
+  const [report, setReport] = useState<Report | null>(null); // Report data
+  const [loading, setLoading] = useState(false); // Loading indicator
+  const [year, setYear] = useState<number>(today.getFullYear()); // Year filter
+  const [month, setMonth] = useState<number>(today.getMonth() + 1); // Month filter
+  const [day, setDay] = useState<string>(today.toISOString().slice(0, 10)); // Day filter
+  const [reportType, setReportType] = useState<"monthly" | "daily">("monthly"); // Monthly/daily toggle
 
-  const [year, setYear] = useState<number>(today.getFullYear());
-  const [month, setMonth] = useState<number>(today.getMonth() + 1);
-  const [day, setDay] = useState<string>(today.toISOString().slice(0, 10));
-  const [reportType, setReportType] = useState<"monthly" | "daily">("monthly");
-
+  // Fetch report data
   const fetchReport = async () => {
     setLoading(true);
     try {
@@ -39,25 +31,29 @@ export default function Reports() {
       }
       const res = await fetch(url);
       const data = await res.json();
-      setReport(data);
+      setReport(data); // Save report data
     } catch (err) {
       console.error(err);
-      setReport(null);
+      setReport(null); // Reset on error
     } finally {
-      setLoading(false);
+      setLoading(false); // Stop loading
     }
   };
 
-  useEffect(() => {
-    fetchReport();
-  }, [year, month, day, reportType]);
+  // Load report on filter change
+  useEffect(() => { fetchReport(); }, [year, month, day, reportType]);
 
+  // Helper: days in month
   const daysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 
+  // Loading state
   if (loading) return <Layout><ActivityIndicator size="large" color="#000" /></Layout>;
+  // No report
   if (!report) return <Layout><Text style={{ textAlign: "center", marginTop: 20 }}>No report data</Text></Layout>;
 
   const topProducts = report.top_products ?? [];
+
+  // Chart data for top products
   const chartData = {
     labels: topProducts.map(p => p.name),
     datasets: [{ data: topProducts.map(p => p.qty_sold), color: () => "#4F46E5", strokeWidth: 2 }],
@@ -68,23 +64,19 @@ export default function Reports() {
     <Layout>
       <Text style={styles.title}>Reports</Text>
 
-      {/* Filters */}
+      {/* Filters: Year, Month, Day */}
       <View style={styles.filters}>
-
         <Text style={styles.filterLabel}>Year</Text>
         <Picker selectedValue={year} onValueChange={setYear} style={styles.picker}>
-          {Array.from({ length: 5 }, (_, i) => today.getFullYear() - i).map(y => (
-            <Picker.Item key={y} label={`${y}`} value={y} />
-          ))}
+          {Array.from({ length: 5 }, (_, i) => today.getFullYear() - i).map(y => <Picker.Item key={y} label={`${y}`} value={y} />)}
         </Picker>
 
         <Text style={styles.filterLabel}>Month</Text>
         <Picker selectedValue={month} onValueChange={setMonth} style={styles.picker}>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-            <Picker.Item key={m} label={`${m}`} value={m} />
-          ))}
+          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <Picker.Item key={m} label={`${m}`} value={m} />)}
         </Picker>
 
+        {/* Day picker if daily report */}
         {reportType === "daily" && (
           <>
             <Text style={styles.filterLabel}>Day</Text>
@@ -97,6 +89,7 @@ export default function Reports() {
           </>
         )}
 
+        {/* Report type toggle buttons */}
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={[styles.button, reportType === "monthly" && styles.activeButton]}
@@ -113,7 +106,7 @@ export default function Reports() {
         </View>
       </View>
 
-      {/* Chart */}
+      {/* Chart: Top products sold */}
       {topProducts.length > 0 ? (
         <>
           <Text style={styles.subtitle}>Top Products Sold</Text>
@@ -138,7 +131,7 @@ export default function Reports() {
         <Text style={{ marginVertical: 16 }}>No product sales data available</Text>
       )}
 
-      {/* Table */}
+      {/* Table: Top products details */}
       <View style={styles.table}>
         <Text style={styles.tableHeader}>Product     Qty Sold     Revenue</Text>
         {topProducts.length > 0 ? (

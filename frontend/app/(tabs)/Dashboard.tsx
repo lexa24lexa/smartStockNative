@@ -3,14 +3,11 @@ import { StyleSheet, Text, View, ScrollView, Dimensions } from "react-native";
 import Svg, { Path, Line, Circle, Text as SvgText } from "react-native-svg";
 import Layout from "../../components/ui/Layout";
 
+// Types
 type CategoryStock = { category: string; total_stock: number };
-type ReplenishmentItem = {
-  product_id: number;
-  product_name: string;
-  current_stock: number;
-  quantity: number | null;
-};
+type ReplenishmentItem = { product_id: number; product_name: string; current_stock: number; quantity: number | null };
 
+// Card showing a single stat
 function StatCard({ value, label, color }: { value: string; label: string; color: string }) {
   return (
     <View style={[styles.card, { backgroundColor: color }]}>
@@ -20,6 +17,7 @@ function StatCard({ value, label, color }: { value: string; label: string; color
   );
 }
 
+// Progress bar for low stock items
 function ProgressBar({ value, maxValue }: { value: number; maxValue: number }) {
   const percentage = Math.min((value / maxValue) * 100, 100);
   let bgColor = "#059669";
@@ -33,14 +31,16 @@ function ProgressBar({ value, maxValue }: { value: number; maxValue: number }) {
   );
 }
 
+// Main dashboard screen
 export default function Dashboard() {
+  // State
   const [categories, setCategories] = useState<CategoryStock[]>([]);
   const [replenishments, setReplenishments] = useState<ReplenishmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const storeId = 1;
 
-  // --- Fetch data ---
+  // Fetch categories and low stock items
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -58,34 +58,32 @@ export default function Dashboard() {
     }
   };
 
-  // --- Initial fetch ---
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // Initial fetch
+  useEffect(() => { fetchData(); }, []);
 
-  // --- Auto refresh every 30 minutes ---
+  // Auto-refresh every 30 minutes
   useEffect(() => {
     const interval = setInterval(fetchData, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // --- Timer for "last updated" label ---
+  // Timer to update "last updated" label every minute
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const interval = setInterval(() => setTick(prev => prev + 1), 60000);
     return () => clearInterval(interval);
   }, []);
 
+  // Text for last updated
   const getUpdatedText = () => {
     if (!lastUpdated) return "Loading…";
-    // use tick to trigger re-render every minute
     const diff = Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
     if (diff < 60) return "Updated just now";
     if (diff < 3600) return `Updated ${Math.floor(diff / 60)} min ago`;
     return `Updated ${Math.floor(diff / 3600)} h ago`;
   };
 
-  // --- Stats ---
+  // Compute dashboard stats
   const stats = useMemo(() => {
     const total = categories.length;
     const outOfStock = categories.filter(c => c.total_stock === 0).length;
@@ -97,9 +95,10 @@ export default function Dashboard() {
     };
   }, [categories, replenishments]);
 
+  // Filter low stock items
   const lowStockItems = useMemo(() => replenishments.filter(i => i.current_stock < 50), [replenishments]);
 
-  // --- Chart ---
+  // Chart setup
   const chartWidth = Dimensions.get("window").width - 32;
   const chartHeight = 220;
   const padding = 40;
@@ -118,9 +117,11 @@ export default function Dashboard() {
   return (
     <Layout onRefresh={fetchData}>
       <ScrollView contentContainerStyle={{ padding: 16 }}>
+        {/* Header */}
         <Text style={styles.title}>Dashboard</Text>
         <Text style={styles.subtitle}>{loading ? "Loading…" : getUpdatedText()}</Text>
 
+        {/* Stats grid */}
         <View style={styles.grid}>
           <StatCard value={`${stats.availability}%`} label="Stock availability" color="#059669" />
           <StatCard value={`${stats.outOfStock}`} label="Out of stock categories" color="#DC2626" />
@@ -128,61 +129,51 @@ export default function Dashboard() {
           <StatCard value={`${stats.activeCategories}`} label="Active categories" color="#1E40AF" />
         </View>
 
-        {/* Stock vs Sales Chart */}
+        {/* Stock vs Sales chart */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Stock vs Sales Trend</Text>
           <Svg width="100%" height={chartHeight}>
+            {/* Y-axis lines and labels */}
             {yAxisValues.map((v, i) => {
               const y = yScale(v);
               return (
                 <React.Fragment key={i}>
                   <Line x1={padding} y1={y} x2={chartWidth - padding} y2={y} stroke="#E5E7EB" strokeWidth={1} />
-                  <SvgText x={padding - 6} y={y + 4} fontSize={10} fill="#6B7280" textAnchor="end">
-                    {v}
-                  </SvgText>
+                  <SvgText x={padding - 6} y={y + 4} fontSize={10} fill="#6B7280" textAnchor="end">{v}</SvgText>
                 </React.Fragment>
               );
             })}
+            {/* Stock and sales lines */}
             <Path d={lineStock} stroke="#059669" strokeWidth={2} fill="none" />
             <Path d={lineSales} stroke="#2563EB" strokeWidth={2} fill="none" />
+            {/* Points */}
             {stockValues.map((v, i) => <Circle key={`s${i}`} cx={xScale(i)} cy={yScale(v)} r={4} fill="#059669" />)}
             {salesValues.map((v, i) => <Circle key={`sa${i}`} cx={xScale(i)} cy={yScale(v)} r={4} fill="#2563EB" />)}
-            {labels.map((l, i) => (
-              <SvgText key={i} x={xScale(i)} y={chartHeight - padding + 14} fontSize={10} fill="#6B7280" textAnchor="middle">
-                {l}
-              </SvgText>
-            ))}
+            {/* X-axis labels */}
+            {labels.map((l, i) => <SvgText key={i} x={xScale(i)} y={chartHeight - padding + 14} fontSize={10} fill="#6B7280" textAnchor="middle">{l}</SvgText>)}
           </Svg>
-
+          {/* Chart legend */}
           <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColorBox, { backgroundColor: "#059669" }]} />
-              <Text style={styles.legendLabel}>Stock</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColorBox, { backgroundColor: "#2563EB" }]} />
-              <Text style={styles.legendLabel}>Sales</Text>
-            </View>
+            <View style={styles.legendItem}><View style={[styles.legendColorBox, { backgroundColor: "#059669" }]} /><Text style={styles.legendLabel}>Stock</Text></View>
+            <View style={styles.legendItem}><View style={[styles.legendColorBox, { backgroundColor: "#2563EB" }]} /><Text style={styles.legendLabel}>Sales</Text></View>
           </View>
         </View>
 
-        {/* Low Stock */}
+        {/* Low stock products */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Low Stock Products (&lt;50)</Text>
-          {lowStockItems.length === 0 ? (
-            <Text style={styles.chartText}>All products have sufficient stock.</Text>
-          ) : (
-            lowStockItems.map(item => {
-              const maxStock = item.quantity || 100;
-              return (
-                <View key={item.product_id} style={styles.lowStockRow}>
-                  <Text style={styles.lowStockName}>{item.product_name}</Text>
-                  <Text style={styles.lowStockQty}>{item.current_stock}</Text>
-                  <ProgressBar value={item.current_stock} maxValue={maxStock} />
-                </View>
-              );
-            })
-          )}
+          {lowStockItems.length === 0
+            ? <Text style={styles.chartText}>All products have sufficient stock.</Text>
+            : lowStockItems.map(item => {
+                const maxStock = item.quantity || 100;
+                return (
+                  <View key={item.product_id} style={styles.lowStockRow}>
+                    <Text style={styles.lowStockName}>{item.product_name}</Text>
+                    <Text style={styles.lowStockQty}>{item.current_stock}</Text>
+                    <ProgressBar value={item.current_stock} maxValue={maxStock} />
+                  </View>
+                );
+              })}
         </View>
       </ScrollView>
     </Layout>

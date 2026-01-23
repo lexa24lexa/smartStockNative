@@ -10,38 +10,46 @@ dayjs.extend(relativeTime);
 const API_BASE_URL = "http://127.0.0.1:8000";
 const STORE_ID = 1;
 
+// Main Predictions screen
 export default function Predictions() {
-  const [data, setData] = useState<any>(null);
-  const [stockSales, setStockSales] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // State
+  const [data, setData] = useState<any>(null); // Prediction data
+  const [stockSales, setStockSales] = useState<any[]>([]); // Stock vs sales data
+  const [loading, setLoading] = useState(true); // Loading indicator
+  const [error, setError] = useState<string | null>(null); // Error state
 
+  // Fetch data on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch predictions
         const predictionsRes = await fetch(`${API_BASE_URL}/analytics/predictions?store_id=${STORE_ID}`);
         if (!predictionsRes.ok) throw new Error("Failed to fetch predictions");
         const predictionsData = await predictionsRes.json();
 
+        // Fetch stock vs sales
         const stockSalesRes = await fetch(`${API_BASE_URL}/analytics/stock-vs-sales`);
         if (!stockSalesRes.ok) throw new Error("Failed to fetch stock vs sales");
         const stockSalesData = await stockSalesRes.json();
 
-        setData(predictionsData);
-        setStockSales(stockSalesData);
+        setData(predictionsData); // Save predictions
+        setStockSales(stockSalesData); // Save stock vs sales
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Unknown error");
+        setError(e instanceof Error ? e.message : "Unknown error"); // Save error
       } finally {
-        setLoading(false);
+        setLoading(false); // Stop loading
       }
     };
 
     fetchData();
   }, []);
 
+  // Loading state
   if (loading) return <Layout><View style={styles.center}><ActivityIndicator size="large" /></View></Layout>;
+  // Error or no data
   if (error || !data) return <Layout><View style={styles.center}><Text style={styles.errorText}>{error ?? "Something went wrong"}</Text></View></Layout>;
 
+  // Prepare chart data
   const categories = stockSales.map(c => c.category);
   const stockValues = stockSales.map(c => c.stock);
   const salesValues = stockSales.map(c => c.sales);
@@ -59,9 +67,11 @@ export default function Predictions() {
   return (
     <Layout>
       <ScrollView contentContainerStyle={{ padding: 16 }}>
+        {/* Last updated */}
         <Text style={styles.subtitle}>Updated {dayjs(data.last_updated).fromNow()}</Text>
         <Text style={styles.title}>Stock vs Sales Trend</Text>
 
+        {/* Bar chart: Stock vs Sales */}
         <View style={styles.chartCard}>
           <BarChart
             data={chartData}
@@ -83,6 +93,7 @@ export default function Predictions() {
             withInnerLines
             showBarTops
           />
+          {/* Chart legend */}
           <View style={styles.legendRow}>
             <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: "#059669" }]} /><Text>Stock</Text></View>
             <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: "#F59E0B" }]} /><Text>Sales</Text></View>
@@ -110,13 +121,16 @@ export default function Predictions() {
   );
 }
 
+// Single prediction row
 function PredictionRow({ product, value, note, color }: { product: string; value: string; note: string; color: string }) {
   return (
     <View style={styles.predictionRow}>
+      {/* Product info */}
       <View style={styles.rowLeft}>
         <View style={[styles.dot, { backgroundColor: color }]} />
         <Text style={styles.product}>{product}</Text>
       </View>
+      {/* Predicted value & note */}
       <View style={{ alignItems: "flex-end" }}>
         <Text style={[styles.percent, { color }]}>{value}</Text>
         <Text style={styles.meta}>{note}</Text>

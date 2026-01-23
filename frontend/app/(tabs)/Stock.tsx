@@ -14,8 +14,10 @@ import {
 } from "@react-navigation/native";
 import Layout from "../../components/ui/Layout";
 
+// Stock status type
 type StockStatus = "Stable" | "Low" | "Critical";
 
+// Interface for each product in stock overview
 interface StockOverview {
   product_id: number;
   product_name: string;
@@ -26,11 +28,13 @@ interface StockOverview {
   last_sale_at?: string | null;
 }
 
+// Props for individual product row
 interface ProductRowProps {
   item: StockOverview;
   onPress: () => void;
 }
 
+// Map status to color
 function statusColor(status: StockStatus) {
   switch (status) {
     case "Critical":
@@ -42,6 +46,7 @@ function statusColor(status: StockStatus) {
   }
 }
 
+// Format last sale date
 function formatLastSale(date?: string | null) {
   if (!date) return "No sales yet";
   const d = new Date(date);
@@ -51,6 +56,7 @@ function formatLastSale(date?: string | null) {
   })}`;
 }
 
+// Render single product row
 function ProductRow({ item, onPress }: ProductRowProps) {
   const color = statusColor(item.status);
 
@@ -59,75 +65,64 @@ function ProductRow({ item, onPress }: ProductRowProps) {
       onPress={onPress}
       style={({ pressed }) => [
         styles.productCard,
-        pressed && { opacity: 0.7 },
+        pressed && { opacity: 0.7 }, // Press feedback
       ]}
     >
+      {/* Product name and status */}
       <View style={styles.row}>
         <Text style={styles.productName}>{item.product_name}</Text>
-        <Text style={{ color, fontWeight: "600" }}>
-          ● {item.status}
-        </Text>
+        <Text style={{ color, fontWeight: "600" }}>● {item.status}</Text>
       </View>
 
+      {/* Total quantity */}
       <Text style={styles.quantity}>{item.total_quantity}</Text>
 
+      {/* Stock progress bar */}
       <View style={styles.progressBackground}>
         <View
           style={[
             styles.progressBar,
-            {
-              width: `${Math.round(item.progress * 100)}%`,
-              backgroundColor: color,
-            },
+            { width: `${Math.round(item.progress * 100)}%`, backgroundColor: color },
           ]}
         />
       </View>
 
+      {/* Meta info: days to out-of-stock & last sale */}
       <View style={styles.metaRow}>
         <Text style={styles.meta}>
           {item.days_to_out_of_stock != null
             ? `Days to OOS: ${item.days_to_out_of_stock}d`
             : "Days to OOS: —"}
         </Text>
-        <Text style={styles.meta}>
-          {formatLastSale(item.last_sale_at)}
-        </Text>
+        <Text style={styles.meta}>{formatLastSale(item.last_sale_at)}</Text>
       </View>
     </Pressable>
   );
 }
 
+// Main Stock overview screen
 export default function Stock() {
-  const navigation =
-    useNavigation<NavigationProp<ParamListBase>>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
-  const [data, setData] = React.useState<StockOverview[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(
-    null
-  );
+  // State
+  const [data, setData] = React.useState<StockOverview[]>([]); // Stock data
+  const [loading, setLoading] = React.useState(true); // Loading state
+  const [error, setError] = React.useState<string | null>(null); // Error state
 
   const STORE_ID = 1;
 
+  // Load stock data on mount
   React.useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(
-          `http://127.0.0.1:8000/stock/overview/${STORE_ID}`
-        );
-
-        if (!res.ok) {
-          throw new Error("Failed to load stock");
-        }
-
+        const res = await fetch(`http://127.0.0.1:8000/stock/overview/${STORE_ID}`);
+        if (!res.ok) throw new Error("Failed to load stock");
         const json = await res.json();
-        setData(json);
+        setData(json); // Save stock data
       } catch (e) {
-        setError(
-          e instanceof Error ? e.message : "Unknown error"
-        );
+        setError(e instanceof Error ? e.message : "Unknown error"); // Save error
       } finally {
-        setLoading(false);
+        setLoading(false); // Done loading
       }
     };
 
@@ -136,37 +131,34 @@ export default function Stock() {
 
   return (
     <Layout>
+      {/* Page header */}
       <Text style={styles.subtitle}>Live inventory</Text>
       <Text style={styles.title}>Stock overview</Text>
 
+      {/* Loading indicator */}
       {loading && (
         <View style={styles.center}>
           <ActivityIndicator size="large" />
         </View>
       )}
 
-      {error && (
-        <Text style={styles.error}>{error}</Text>
-      )}
+      {/* Error message */}
+      {error && <Text style={styles.error}>{error}</Text>}
 
+      {/* Empty state */}
       {!loading && !error && data.length === 0 && (
-        <Text style={styles.meta}>
-          No stock available for this store.
-        </Text>
+        <Text style={styles.meta}>No stock available for this store.</Text>
       )}
 
+      {/* Stock list */}
       <FlatList
         data={data}
-        keyExtractor={(item) =>
-          item.product_id.toString()
-        }
+        keyExtractor={(item) => item.product_id.toString()}
         renderItem={({ item }) => (
           <ProductRow
             item={item}
             onPress={() =>
-              navigation.navigate("Order-product", {
-                productId: item.product_id,
-              })
+              navigation.navigate("Order-product", { productId: item.product_id })
             }
           />
         )}
@@ -177,66 +169,26 @@ export default function Stock() {
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 16,
-  },
-  subtitle: {
-    color: "#6B7280",
-  },
+  title: { fontSize: 22, fontWeight: "bold", marginBottom: 16 },
+  subtitle: { color: "#6B7280" },
 
-  center: {
-    marginTop: 32,
-  },
+  center: { marginTop: 32 },
 
-  error: {
-    color: "#DC2626",
-    marginVertical: 16,
-  },
+  error: { color: "#DC2626", marginVertical: 16 },
 
-  productCard: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
+  productCard: { backgroundColor: "#fff", padding: 16, borderRadius: 12, marginBottom: 12 },
 
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
 
-  productName: {
-    fontWeight: "600",
-    fontSize: 16,
-  },
+  productName: { fontWeight: "600", fontSize: 16 },
 
-  quantity: {
-    fontSize: 20,
-    marginVertical: 8,
-    fontWeight: "700",
-  },
+  quantity: { fontSize: 20, marginVertical: 8, fontWeight: "700" },
 
-  progressBackground: {
-    height: 6,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
+  progressBackground: { height: 6, backgroundColor: "#E5E7EB", borderRadius: 3, overflow: "hidden" },
 
-  progressBar: {
-    height: 6,
-    borderRadius: 3,
-  },
+  progressBar: { height: 6, borderRadius: 3 },
 
-  metaRow: {
-    marginTop: 6,
-  },
+  metaRow: { marginTop: 6 },
 
-  meta: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
+  meta: { fontSize: 12, color: "#6B7280" },
 });
