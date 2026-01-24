@@ -1,25 +1,25 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View, ActivityIndicator, Dimensions, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator, Dimensions, TouchableOpacity, Platform } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { LineChart } from "react-native-chart-kit";
 import Layout from "../../components/ui/Layout";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 // Types
 type TopProduct = { product_id: number; name: string; qty_sold: number; revenue: number };
 type Report = { sale_count: number; total_items_sold: number; total_revenue: number; top_products?: TopProduct[] };
 
-// Main Reports screen
 export default function Reports() {
   const storeId = 1;
   const today = new Date();
 
-  // State
-  const [report, setReport] = useState<Report | null>(null); // Report data
-  const [loading, setLoading] = useState(false); // Loading indicator
-  const [year, setYear] = useState<number>(today.getFullYear()); // Year filter
-  const [month, setMonth] = useState<number>(today.getMonth() + 1); // Month filter
-  const [day, setDay] = useState<string>(today.toISOString().slice(0, 10)); // Day filter
-  const [reportType, setReportType] = useState<"monthly" | "daily">("monthly"); // Monthly/daily toggle
+  const [report, setReport] = useState<Report | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [year, setYear] = useState<number>(today.getFullYear());
+  const [month, setMonth] = useState<number>(today.getMonth() + 1);
+  const [day, setDay] = useState<string>(today.toISOString().slice(0, 10));
+  const [reportType, setReportType] = useState<"monthly" | "daily">("monthly");
 
   // Fetch report data
   const fetchReport = async () => {
@@ -31,29 +31,55 @@ export default function Reports() {
       }
       const res = await fetch(url);
       const data = await res.json();
-      setReport(data); // Save report data
+      setReport(data);
     } catch (err) {
       console.error(err);
-      setReport(null); // Reset on error
+      setReport(null);
     } finally {
-      setLoading(false); // Stop loading
+      setLoading(false);
     }
   };
 
-  // Load report on filter change
+  // Export report
+  const exportReport = async (format: "pdf" | "excel") => {
+    try {
+      const fileExt = format === "pdf" ? "pdf" : "xlsx";
+      const url = `http://127.0.0.1:8000/stock/${storeId}/daily-report?report_date=${day}&format=${format}`;
+
+      if (Platform.OS === "web") {
+        // Web: open in new tab
+        window.open(url, "_blank");
+        return;
+      }
+
+      // Mobile: use temporary file path
+      const dir = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory;
+      const localUri = `${dir}report-${day}.${fileExt}`;
+
+      const downloadResumable = FileSystem.createDownloadResumable(url, localUri);
+      const { uri } = await downloadResumable.downloadAsync();
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri);
+      } else {
+        alert("Sharing not available. File downloaded to: " + uri);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to export report: " + err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => { fetchReport(); }, [year, month, day, reportType]);
 
-  // Helper: days in month
   const daysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 
-  // Loading state
   if (loading) return <Layout><ActivityIndicator size="large" color="#000" /></Layout>;
-  // No report
   if (!report) return <Layout><Text style={{ textAlign: "center", marginTop: 20 }}>No report data</Text></Layout>;
 
   const topProducts = report.top_products ?? [];
-
-  // Chart data for top products
   const chartData = {
     labels: topProducts.map(p => p.name),
     datasets: [{ data: topProducts.map(p => p.qty_sold), color: () => "#4F46E5", strokeWidth: 2 }],
@@ -64,7 +90,7 @@ export default function Reports() {
     <Layout>
       <Text style={styles.title}>Reports</Text>
 
-      {/* Filters: Year, Month, Day */}
+      {/* Filters */}
       <View style={styles.filters}>
         <Text style={styles.filterLabel}>Year</Text>
         <Picker selectedValue={year} onValueChange={setYear} style={styles.picker}>
@@ -76,7 +102,6 @@ export default function Reports() {
           {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <Picker.Item key={m} label={`${m}`} value={m} />)}
         </Picker>
 
-        {/* Day picker if daily report */}
         {reportType === "daily" && (
           <>
             <Text style={styles.filterLabel}>Day</Text>
@@ -89,24 +114,28 @@ export default function Reports() {
           </>
         )}
 
-        {/* Report type toggle buttons */}
+        {/* Report type buttons */}
         <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[styles.button, reportType === "monthly" && styles.activeButton]}
-            onPress={() => setReportType("monthly")}
-          >
+          <TouchableOpacity style={[styles.button, reportType === "monthly" && styles.activeButton]} onPress={() => setReportType("monthly")}>
             <Text style={[styles.buttonText, reportType === "monthly" && styles.activeButtonText]}>Monthly</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, reportType === "daily" && styles.activeButton]}
-            onPress={() => setReportType("daily")}
-          >
+          <TouchableOpacity style={[styles.button, reportType === "daily" && styles.activeButton]} onPress={() => setReportType("daily")}>
             <Text style={[styles.buttonText, reportType === "daily" && styles.activeButtonText]}>Daily</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Export buttons */}
+        <View style={styles.exportRow}>
+          <TouchableOpacity style={styles.exportButton} onPress={() => exportReport("pdf")}>
+            <Text style={styles.exportButtonText}>Export PDF</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.exportButton} onPress={() => exportReport("excel")}>
+            <Text style={styles.exportButtonText}>Export Excel</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Chart: Top products sold */}
+      {/* Chart */}
       {topProducts.length > 0 ? (
         <>
           <Text style={styles.subtitle}>Top Products Sold</Text>
@@ -131,7 +160,7 @@ export default function Reports() {
         <Text style={{ marginVertical: 16 }}>No product sales data available</Text>
       )}
 
-      {/* Table: Top products details */}
+      {/* Table */}
       <View style={styles.table}>
         <Text style={styles.tableHeader}>Product     Qty Sold     Revenue</Text>
         {topProducts.length > 0 ? (
@@ -162,4 +191,7 @@ const styles = StyleSheet.create({
   activeButton: { backgroundColor: "#4F46E5" },
   buttonText: { color: "#000", fontWeight: "600" },
   activeButtonText: { color: "#fff" },
+  exportRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 12 },
+  exportButton: { backgroundColor: "#4F46E5", padding: 10, borderRadius: 8, flex: 1, marginHorizontal: 4 },
+  exportButtonText: { color: "#fff", fontWeight: "600", textAlign: "center" },
 });

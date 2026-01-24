@@ -1,8 +1,15 @@
+# stock_report.py
 import io
 from datetime import date
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import xlsxwriter
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+
+router = APIRouter()
+
+# ---------- Report Generators ----------
 
 def generate_stock_pdf_report(stock_data, store_name: str, report_date: date):
     buffer = io.BytesIO()
@@ -14,7 +21,11 @@ def generate_stock_pdf_report(stock_data, store_name: str, report_date: date):
     
     y = 700
     for item in stock_data:
-        c.drawString(50, y, f"{item['product_name']} | {item['batch_code']} | {item['expiration_date']} | Qty: {item['quantity']}")
+        c.drawString(
+            50,
+            y,
+            f"{item['product_name']} | {item['batch_code']} | {item['expiration_date']} | Qty: {item['quantity']}"
+        )
         y -= 20
         if y < 50:
             c.showPage()
@@ -41,3 +52,34 @@ def generate_stock_excel_report(stock_data, store_name: str, report_date: date):
     workbook.close()
     buffer.seek(0)
     return buffer
+
+# ---------- Example API Endpoint ----------
+
+# Dummy stock data for testing
+sample_stock_data = [
+    {"product_name": "Product A", "batch_code": "B123", "expiration_date": "2026-02-28", "quantity": 50},
+    {"product_name": "Product B", "batch_code": "B124", "expiration_date": "2026-03-15", "quantity": 20},
+]
+
+@router.get("/stock/{store_id}/daily-report")
+def daily_report(store_id: int, report_date: date, format: str = "pdf"):
+    store_name = f"Store {store_id}"
+
+    if format.lower() == "pdf":
+        buffer = generate_stock_pdf_report(sample_stock_data, store_name, report_date)
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=report-{report_date}.pdf"}
+        )
+
+    elif format.lower() == "excel":
+        buffer = generate_stock_excel_report(sample_stock_data, store_name, report_date)
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=report-{report_date}.xlsx"}
+        )
+
+    else:
+        return {"error": "Invalid format. Use 'pdf' or 'excel'."}
