@@ -240,7 +240,7 @@ INSERT INTO PRODUCT (name, unit_price, supplier_id, category_id, is_active) VALU
 ('Milk 1L', 1.20, 1, 1, TRUE),
 ('Bread Whole Grain', 2.50, 2, 2, TRUE),
 ('Orange Juice', 3.00, 3, 3, TRUE),
-('Expired Yogurt', 1.00, 1, 1, TRUE);
+('Soja Milk', 1.00, 1, 1, TRUE);
 
 -- Batches
 INSERT INTO BATCH (product_id, batch_code, expiration_date) VALUES

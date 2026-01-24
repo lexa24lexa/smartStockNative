@@ -11,10 +11,8 @@ import { NavigationProp, ParamListBase, useNavigation } from "@react-navigation/
 import Layout from "../../components/ui/Layout";
 import { Colors, Font, Spacing, Radius } from "../../constants/theme";
 
-// Stock status type
 type StockStatus = "Stable" | "Low" | "Critical";
 
-// Interface for each product
 interface StockOverview {
   product_id: number;
   product_name: string;
@@ -27,67 +25,72 @@ interface StockOverview {
   replenishment_frequency?: number | null;
   next_replenishment_date?: string | null;
   quantity?: number | null;
+  facing?: number | null;
 }
 
-// Props for a product row
 interface ProductRowProps {
   item: StockOverview;
   onPress: () => void;
 }
 
-// Map status to color
 function statusColor(status: StockStatus) {
   switch (status) {
-    case "Critical": return Colors.danger;
-    case "Low": return Colors.warning;
-    default: return Colors.primary;
+    case "Critical":
+      return Colors.danger;
+    case "Low":
+      return Colors.warning;
+    default:
+      return Colors.primary;
   }
 }
 
-// Format last sale date
 function formatLastSale(date?: string | null) {
   if (!date) return "No sales yet";
   const d = new Date(date);
   return `Last sale: ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-// Render single product
 function ProductRow({ item, onPress }: ProductRowProps) {
   const color = statusColor(item.status);
-  const formatDate = (date?: string | null) => date ? new Date(date).toLocaleDateString() : "—";
+  const formatDate = (date?: string | null) => (date ? new Date(date).toLocaleDateString() : "—");
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.productCard, pressed && { opacity: 0.7 }]}>
-      {/* Name + status */}
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.productCard, pressed && { opacity: 0.7 }]}
+    >
       <View style={styles.row}>
         <Text style={Font.label}>{item.product_name}</Text>
         <Text style={{ color, fontWeight: "600" }}>● {item.status}</Text>
       </View>
 
-      {/* Total qty */}
       <Text style={[Font.title, { marginVertical: 8 }]}>{item.total_quantity}</Text>
 
-      {/* Progress bar */}
       <View style={styles.progressBackground}>
-        <View style={[styles.progressBar, { width: `${Math.round(item.progress * 100)}%`, backgroundColor: color }]} />
+        <View
+          style={[
+            styles.progressBar,
+            { width: `${Math.round(item.progress * 100)}%`, backgroundColor: color },
+          ]}
+        />
       </View>
 
-      {/* Meta info */}
       <View style={styles.metaRow}>
         <Text style={Font.meta}>Days to OOS: {item.days_to_out_of_stock ?? "—"}</Text>
         <Text style={Font.meta}>{formatLastSale(item.last_sale_at)}</Text>
         <Text style={Font.meta}>Avg daily sales: {item.average_daily_sales?.toFixed(2) ?? "0.00"}</Text>
         <Text style={Font.meta}>
-          Frequency: every {item.replenishment_frequency ?? "—"} day{item.replenishment_frequency && item.replenishment_frequency > 1 ? "s" : ""}
+          Frequency: every {item.replenishment_frequency ?? "—"} day
+          {item.replenishment_frequency && item.replenishment_frequency > 1 ? "s" : ""}
         </Text>
         <Text style={Font.meta}>Next replenishment: {formatDate(item.next_replenishment_date)}</Text>
         <Text style={Font.meta}>Suggested qty: {item.quantity ?? 0}</Text>
+        <Text style={Font.meta}>Shelf facing: {item.facing ?? 0}</Text>
       </View>
     </Pressable>
   );
 }
 
-// Main stock screen
 export default function Stock() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [data, setData] = React.useState<StockOverview[]>([]);
@@ -95,7 +98,6 @@ export default function Stock() {
   const [error, setError] = React.useState<string | null>(null);
   const STORE_ID = 1;
 
-  // Load data on mount
   React.useEffect(() => {
     const load = async () => {
       try {
@@ -109,6 +111,7 @@ export default function Stock() {
           replenishment_frequency: p.replenishment_frequency ?? null,
           next_replenishment_date: p.next_replenishment_date ?? null,
           quantity: p.quantity ?? null,
+          facing: p.facing ?? null,
         }));
 
         setData(mapped);
@@ -129,17 +132,16 @@ export default function Stock() {
 
       {loading && (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} /> {/* show spinner */}
+          <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       )}
 
-      {error && <Text style={[Font.meta, { color: Colors.danger }]}>{error}</Text>} {/* show error */}
+      {error && <Text style={[Font.meta, { color: Colors.danger }]}>{error}</Text>}
 
       {!loading && !error && data.length === 0 && (
         <Text style={Font.meta}>No stock available for this store.</Text>
       )}
 
-      {/* List of products */}
       <FlatList
         data={data}
         keyExtractor={(item) => item.product_id.toString()}
@@ -156,10 +158,14 @@ export default function Stock() {
   );
 }
 
-// Styles
 const styles = StyleSheet.create({
   center: { marginTop: 32 },
-  productCard: { backgroundColor: Colors.bgCard, padding: Spacing.m, borderRadius: Radius.card, marginBottom: Spacing.m },
+  productCard: {
+    backgroundColor: Colors.bgCard,
+    padding: Spacing.m,
+    borderRadius: Radius.card,
+    marginBottom: Spacing.m,
+  },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   progressBackground: { height: 6, backgroundColor: Colors.border, borderRadius: 3, overflow: "hidden" },
   progressBar: { height: 6, borderRadius: 3 },

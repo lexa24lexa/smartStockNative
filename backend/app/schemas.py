@@ -92,6 +92,7 @@ class StockOverviewResponse(BaseModel):
     replenishment_frequency: Optional[int] = None
     next_replenishment_date: Optional[datetime] = None
     quantity: Optional[int] = None
+    facing: Optional[int] = None
 
     class Config:
         from_attributes = True
