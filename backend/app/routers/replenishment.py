@@ -4,6 +4,7 @@ from sqlalchemy import func, cast, Date
 from typing import List, Optional
 from datetime import date, date as date_class, timedelta
 from .. import models, database, schemas
+from .deps import get_current_user
 
 router = APIRouter()
 
@@ -484,3 +485,66 @@ def delete_replenishment_list_item(store_id: int, list_date: date_class, product
     db.delete(item)
     db.commit()
     return {"message": "Item deleted"}
+
+# Override replenishment item (manager only)
+@router.post("/replenishment-lists/{store_id}/{list_date}/items/{product_id}/override", response_model=schemas.ReplenishmentListItemResponse)
+def override_replenishment_item(
+    store_id: int,
+    list_date: date_class,
+    product_id: int,
+    override_data: schemas.ReplenishmentListItemUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Allow a manager to manually adjust a replenishment item before confirmation.
+    """
+    # Only managers (role_id == 2) can override
+    if current_user.role_id != 2:
+        raise HTTPException(status_code=403, detail="Only managers can override replenishment items")
+
+    # Get the list and item
+    replenishment_list = db.query(models.ReplenishmentList).filter(
+        models.ReplenishmentList.store_id == store_id,
+        models.ReplenishmentList.list_date == list_date
+    ).first()
+    if not replenishment_list:
+        raise HTTPException(status_code=404, detail="Replenishment list not found")
+
+    item = db.query(models.ReplenishmentListItem).filter(
+        models.ReplenishmentListItem.list_id == replenishment_list.list_id,
+        models.ReplenishmentListItem.product_id == product_id
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Product not found in list")
+
+    # Apply overrides
+    if override_data.quantity is not None:
+        if override_data.quantity < 0:
+            raise HTTPException(status_code=400, detail="Quantity cannot be negative")
+        item.quantity = override_data.quantity
+    if override_data.reason is not None:
+        item.reason = override_data.reason
+    if override_data.priority is not None:
+        valid_priorities = ["High", "Medium", "Low"]
+        if override_data.priority not in valid_priorities:
+            raise HTTPException(status_code=400, detail=f"Priority must be one of {', '.join(valid_priorities)}")
+        item.priority = override_data.priority
+    if override_data.notes is not None:
+        item.notes = override_data.notes
+
+    db.commit()
+    db.refresh(item)
+
+    product = db.query(models.Product).filter(models.Product.product_id == item.product_id).first()
+    return schemas.ReplenishmentListItemResponse(
+        item_id=item.item_id,
+        list_id=item.list_id,
+        product_id=item.product_id,
+        product_name=product.name if product else None,
+        quantity=item.quantity,
+        current_stock=item.current_stock,
+        reason=item.reason,
+        priority=item.priority,
+        notes=item.notes
+    )
