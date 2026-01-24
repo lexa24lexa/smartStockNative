@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react"; 
 import { StyleSheet, Text, View, ActivityIndicator, Dimensions, TouchableOpacity, Platform } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { LineChart } from "react-native-chart-kit";
@@ -15,8 +15,8 @@ type Report = {
   total_items_sold: number;
   total_revenue: number;
   top_products?: TopProduct[];
-  replenishment_efficiency_pct?: number | null; // FR11
-  wastage?: number | null; // FR11
+  replenishment_efficiency_pct?: number | null;
+  wastage?: number | null;
 };
 
 export default function Reports() {
@@ -25,6 +25,7 @@ export default function Reports() {
 
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false); // NEW
 
   const [year, setYear] = useState<number>(today.getFullYear());
   const [month, setMonth] = useState<number>(today.getMonth() + 1);
@@ -108,6 +109,27 @@ export default function Reports() {
     }
   };
 
+  // Send daily report via email
+  const sendReportEmail = async () => {
+    if (reportType !== "daily") {
+      alert("Email sending is only available for daily reports.");
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const url = `http://127.0.0.1:8000/stock/${storeId}/daily-report?report_date=${day}&format=pdf&send_email=true`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to send email.");
+      alert("Stock report sent via email successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to send email: " + (err instanceof Error ? err.message : "Unknown error"));
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   useEffect(() => { fetchCategories(); }, []);
   useEffect(() => { fetchReport(); }, [year, month, day, reportType, selectedCategory, selectedProduct]);
 
@@ -183,13 +205,22 @@ export default function Reports() {
         </TouchableOpacity>
       </View>
 
-      {/* Export buttons */}
+      {/* Export & Email buttons */}
       <View style={{ flexDirection: "row", justifyContent: "space-around", marginTop: Spacing.m }}>
         <TouchableOpacity style={styles.exportButton} onPress={() => exportReport("pdf")}>
           <Text style={[Font.label, { color: Colors.bgCard, textAlign: "center" }]}>Export PDF</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.exportButton} onPress={() => exportReport("excel")}>
           <Text style={[Font.label, { color: Colors.bgCard, textAlign: "center" }]}>Export Excel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.exportButton, { backgroundColor: Colors.primary }]}
+          onPress={sendReportEmail}
+          disabled={sendingEmail}
+        >
+          <Text style={[Font.label, { color: Colors.bgCard, textAlign: "center" }]}>
+            {sendingEmail ? "Sending..." : "Send via Email"}
+          </Text>
         </TouchableOpacity>
       </View>
 

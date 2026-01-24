@@ -33,5 +33,3 @@ app.include_router(categories.router, tags=["Categories"])
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the SmartStock API"}
-
-print(app.routes)
