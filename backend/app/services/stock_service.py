@@ -146,8 +146,18 @@ class StockService:
         ]
 
     @staticmethod
-    def get_stock_overview(db: Session, store_id: int):
-        # Overview of stock per product with status and forecast
+    def get_stock_overview(db: Session, store_id: int) -> List[schemas.StockOverviewResponse]:
+        """
+        Returns stock overview per product including:
+        - total quantity
+        - status
+        - progress
+        - average daily sales
+        - days to out-of-stock
+        - last sale date
+        - replenishment frequency & next replenishment
+        - suggested quantity
+        """
         stock_rows = (
             db.query(
                 models.Product.product_id,
@@ -165,52 +175,37 @@ class StockService:
         results = []
 
         for row in stock_rows:
-            # Last sale date
             last_sale = (
                 db.query(func.max(models.Sale.date))
                 .join(models.SaleLine, models.Sale.sale_id == models.SaleLine.sale_id)
                 .join(models.Batch, models.Batch.batch_id == models.SaleLine.batch_id)
-                .filter(
-                    models.Batch.product_id == row.product_id,
-                    models.Sale.store_id == store_id,
-                )
+                .filter(models.Batch.product_id == row.product_id,
+                        models.Sale.store_id == store_id)
                 .scalar()
             )
 
-            # Total sold quantity
             total_sold = (
                 db.query(func.sum(models.SaleLine.quantity))
                 .join(models.Batch)
                 .join(models.Sale)
-                .filter(
-                    models.Batch.product_id == row.product_id,
-                    models.Sale.store_id == store_id,
-                )
-                .scalar()
-                or 0
+                .filter(models.Batch.product_id == row.product_id,
+                        models.Sale.store_id == store_id)
+                .scalar() or 0
             )
 
-            # Count days with sales
-            days = (
+            days_with_sales = (
                 db.query(func.count(func.distinct(func.date(models.Sale.date))))
                 .join(models.SaleLine)
                 .join(models.Batch)
-                .filter(
-                    models.Batch.product_id == row.product_id,
-                    models.Sale.store_id == store_id,
-                )
-                .scalar()
-                or 1
+                .filter(models.Batch.product_id == row.product_id,
+                        models.Sale.store_id == store_id)
+                .scalar() or 1
             )
 
-            avg_daily_sales = round(total_sold / days) if days else 0
-            days_to_oos = (
-                int(row.total_quantity / avg_daily_sales)
-                if avg_daily_sales > 0
-                else None
-            )
+            avg_daily_sales = round(total_sold / days_with_sales, 2) if days_with_sales else 0
 
-            # Stock status based on reorder level
+            days_to_oos = int(row.total_quantity / avg_daily_sales) if avg_daily_sales > 0 else None
+
             if row.total_quantity <= row.reorder_level:
                 status = "Critical"
             elif row.total_quantity <= row.reorder_level * 2:
@@ -218,8 +213,28 @@ class StockService:
             else:
                 status = "Stable"
 
-            # Progress bar ratio (0-1)
             progress = min(row.total_quantity / (row.reorder_level * 3), 1)
+
+            freq_record = (
+                db.query(models.ReplenishmentFrequency)
+                .filter(models.ReplenishmentFrequency.store_id == store_id,
+                        models.ReplenishmentFrequency.product_id == row.product_id)
+                .first()
+            )
+
+            replenishment_frequency = freq_record.replenishment_frequency if freq_record else None
+            last_replenishment_date = freq_record.last_replenishment_date if freq_record else None
+            next_replenishment_date = (
+                last_replenishment_date + timedelta(days=replenishment_frequency)
+                if last_replenishment_date and replenishment_frequency else None
+            )
+
+            suggested_qty = (
+                int(avg_daily_sales * replenishment_frequency - row.total_quantity)
+                if avg_daily_sales and replenishment_frequency else None
+            )
+            if suggested_qty is not None and suggested_qty < 0:
+                suggested_qty = 0
 
             results.append(
                 schemas.StockOverviewResponse(
@@ -232,6 +247,9 @@ class StockService:
                     average_daily_sales=avg_daily_sales,
                     days_to_out_of_stock=days_to_oos,
                     last_sale_at=last_sale,
+                    replenishment_frequency=replenishment_frequency,
+                    next_replenishment_date=next_replenishment_date,
+                    quantity=suggested_qty
                 )
             )
 

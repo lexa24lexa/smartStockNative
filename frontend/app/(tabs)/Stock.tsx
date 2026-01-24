@@ -14,7 +14,7 @@ import { Colors, Font, Spacing, Radius } from "../../constants/theme";
 // Stock status type
 type StockStatus = "Stable" | "Low" | "Critical";
 
-// Interface for each product in stock overview
+// Interface for each product
 interface StockOverview {
   product_id: number;
   product_name: string;
@@ -24,9 +24,12 @@ interface StockOverview {
   days_to_out_of_stock?: number | null;
   last_sale_at?: string | null;
   average_daily_sales?: number | null;
+  replenishment_frequency?: number | null;
+  next_replenishment_date?: string | null;
+  quantity?: number | null;
 }
 
-// Props for individual product row
+// Props for a product row
 interface ProductRowProps {
   item: StockOverview;
   onPress: () => void;
@@ -35,12 +38,9 @@ interface ProductRowProps {
 // Map status to color
 function statusColor(status: StockStatus) {
   switch (status) {
-    case "Critical":
-      return Colors.danger;
-    case "Low":
-      return Colors.warning;
-    default:
-      return Colors.primary;
+    case "Critical": return Colors.danger;
+    case "Low": return Colors.warning;
+    default: return Colors.primary;
   }
 }
 
@@ -48,125 +48,105 @@ function statusColor(status: StockStatus) {
 function formatLastSale(date?: string | null) {
   if (!date) return "No sales yet";
   const d = new Date(date);
-  return `Last sale: ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
+  return `Last sale: ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-// Render single product row
+// Render single product
 function ProductRow({ item, onPress }: ProductRowProps) {
   const color = statusColor(item.status);
+  const formatDate = (date?: string | null) => date ? new Date(date).toLocaleDateString() : "—";
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.productCard,
-        pressed && { opacity: 0.7 },
-      ]}
-    >
-      {/* Product name and status */}
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.productCard, pressed && { opacity: 0.7 }]}>
+      {/* Name + status */}
       <View style={styles.row}>
         <Text style={Font.label}>{item.product_name}</Text>
-        <Text style={{ color, fontWeight: "600" as const }}>● {item.status}</Text>
+        <Text style={{ color, fontWeight: "600" }}>● {item.status}</Text>
       </View>
 
-      {/* Total quantity */}
+      {/* Total qty */}
       <Text style={[Font.title, { marginVertical: 8 }]}>{item.total_quantity}</Text>
 
-      {/* Stock progress bar */}
+      {/* Progress bar */}
       <View style={styles.progressBackground}>
-        <View
-          style={[
-            styles.progressBar,
-            { width: `${Math.round(item.progress * 100)}%`, backgroundColor: color },
-          ]}
-        />
+        <View style={[styles.progressBar, { width: `${Math.round(item.progress * 100)}%`, backgroundColor: color }]} />
       </View>
 
-      {/* Meta info: days to out-of-stock & last sale */}
+      {/* Meta info */}
       <View style={styles.metaRow}>
-        <Text style={Font.meta}>
-          {item.days_to_out_of_stock != null
-            ? `Days to OOS: ${item.days_to_out_of_stock}d`
-            : "Days to OOS: —"}
-        </Text>
+        <Text style={Font.meta}>Days to OOS: {item.days_to_out_of_stock ?? "—"}</Text>
         <Text style={Font.meta}>{formatLastSale(item.last_sale_at)}</Text>
-        {item.average_daily_sales != null && (
-          <Text style={Font.meta}>Avg daily sales: {item.average_daily_sales.toFixed(2)}</Text>
-        )}
+        <Text style={Font.meta}>Avg daily sales: {item.average_daily_sales?.toFixed(2) ?? "0.00"}</Text>
+        <Text style={Font.meta}>
+          Frequency: every {item.replenishment_frequency ?? "—"} day{item.replenishment_frequency && item.replenishment_frequency > 1 ? "s" : ""}
+        </Text>
+        <Text style={Font.meta}>Next replenishment: {formatDate(item.next_replenishment_date)}</Text>
+        <Text style={Font.meta}>Suggested qty: {item.quantity ?? 0}</Text>
       </View>
     </Pressable>
   );
 }
 
-// Main Stock overview screen
+// Main stock screen
 export default function Stock() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-
-  // State
   const [data, setData] = React.useState<StockOverview[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-
   const STORE_ID = 1;
 
-  // Load stock data on mount
+  // Load data on mount
   React.useEffect(() => {
-  const load = async () => {
-    try {
-      const res = await fetch(`http://127.0.0.1:8000/stock/overview/${STORE_ID}`);
-      if (!res.ok) throw new Error("Failed to load stock");
-      const json = await res.json();
+    const load = async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/stock/overview/${STORE_ID}`);
+        if (!res.ok) throw new Error("Failed to load stock");
+        const json = await res.json();
 
-      const mapped: StockOverview[] = json.map((p: any) => ({
-        ...p,
-        average_daily_sales: p.average_daily_sales ?? 0,
-      }));
+        const mapped: StockOverview[] = json.map((p: any) => ({
+          ...p,
+          average_daily_sales: p.average_daily_sales ?? 0,
+          replenishment_frequency: p.replenishment_frequency ?? null,
+          next_replenishment_date: p.next_replenishment_date ?? null,
+          quantity: p.quantity ?? null,
+        }));
 
-      setData(mapped);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setLoading(false);
-    }
-  };
+        setData(mapped);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Unknown error");
+      } finally {
+        setLoading(false);
+      }
+    };
 
     load();
   }, []);
 
   return (
     <Layout>
-      {/* Page header */}
       <Text style={Font.subtitle}>Live inventory</Text>
       <Text style={Font.title}>Stock overview</Text>
 
-      {/* Loading indicator */}
       {loading && (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.primary} /> {/* show spinner */}
         </View>
       )}
 
-      {/* Error message */}
-      {error && <Text style={[Font.meta, { color: Colors.danger }]}>{error}</Text>}
+      {error && <Text style={[Font.meta, { color: Colors.danger }]}>{error}</Text>} {/* show error */}
 
-      {/* Empty state */}
       {!loading && !error && data.length === 0 && (
         <Text style={Font.meta}>No stock available for this store.</Text>
       )}
 
-      {/* Stock list */}
+      {/* List of products */}
       <FlatList
         data={data}
         keyExtractor={(item) => item.product_id.toString()}
         renderItem={({ item }) => (
           <ProductRow
             item={item}
-            onPress={() =>
-              navigation.navigate("Order-product", { productId: item.product_id })
-            }
+            onPress={() => navigation.navigate("Order-product", { productId: item.product_id })}
           />
         )}
         showsVerticalScrollIndicator={false}
@@ -176,26 +156,12 @@ export default function Stock() {
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
   center: { marginTop: 32 },
-
-  productCard: {
-    backgroundColor: Colors.bgCard,
-    padding: Spacing.m,
-    borderRadius: Radius.card,
-    marginBottom: Spacing.m,
-  },
-
+  productCard: { backgroundColor: Colors.bgCard, padding: Spacing.m, borderRadius: Radius.card, marginBottom: Spacing.m },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-
-  progressBackground: {
-    height: 6,
-    backgroundColor: Colors.border,
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-
+  progressBackground: { height: 6, backgroundColor: Colors.border, borderRadius: 3, overflow: "hidden" },
   progressBar: { height: 6, borderRadius: 3 },
-
   metaRow: { marginTop: 6 },
 });

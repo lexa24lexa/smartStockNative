@@ -89,6 +89,12 @@ class StockOverviewResponse(BaseModel):
     average_daily_sales: float
     days_to_out_of_stock: Optional[int]
     last_sale_at: Optional[datetime]
+    replenishment_frequency: Optional[int] = None
+    next_replenishment_date: Optional[datetime] = None
+    quantity: Optional[int] = None
+
+    class Config:
+        from_attributes = True
 
 class StockPredictionItem(BaseModel):
     product_id: int
