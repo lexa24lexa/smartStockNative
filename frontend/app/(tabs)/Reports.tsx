@@ -10,7 +10,14 @@ import { Colors, Font, Spacing, Radius } from "../../constants/theme";
 // Types
 type TopProduct = { product_id: number; name: string; qty_sold: number; revenue: number };
 type Category = { category_id: number; category_name: string };
-type Report = { sale_count: number; total_items_sold: number; total_revenue: number; top_products?: TopProduct[] };
+type Report = {
+  sale_count: number;
+  total_items_sold: number;
+  total_revenue: number;
+  top_products?: TopProduct[];
+  replenishment_efficiency_pct?: number | null; // FR11
+  wastage?: number | null; // FR11
+};
 
 export default function Reports() {
   const storeId = 1;
@@ -66,7 +73,16 @@ export default function Reports() {
   const exportReport = async (format: "pdf" | "excel") => {
     try {
       const fileExt = format === "pdf" ? "pdf" : "xlsx";
-      const url = `http://127.0.0.1:8000/stock/${storeId}/daily-report?report_date=${day}&format=${format}`;
+      let url = "";
+
+      if (reportType === "daily") {
+        url = `http://127.0.0.1:8000/stock/${storeId}/daily-report?report_date=${day}&format=${format}`;
+      } else {
+        // Monthly report export
+        url = `http://127.0.0.1:8000/reports/monthly?store_id=${storeId}&year=${year}&month=${month}&format=${format}`;
+        if (selectedCategory) url += `&category_id=${selectedCategory}`;
+        if (selectedProduct) url += `&product_id=${selectedProduct}`;
+      }
 
       if (Platform.OS === "web") {
         window.open(url, "_blank");
@@ -74,7 +90,7 @@ export default function Reports() {
       }
 
       const dir = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory;
-      const localUri = `${dir}report-${day}.${fileExt}`;
+      const localUri = `${dir}report-${reportType}-${reportType === "daily" ? day : `${year}-${month}`}.${fileExt}`;
 
       const downloadResumable = FileSystem.createDownloadResumable(url, localUri);
       const { uri } = await downloadResumable.downloadAsync();
@@ -176,6 +192,14 @@ export default function Reports() {
           <Text style={[Font.label, { color: Colors.bgCard, textAlign: "center" }]}>Export Excel</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Summary Metrics */}
+      {report && reportType === "monthly" && (
+        <View style={{ marginVertical: Spacing.m }}>
+          <Text style={Font.label}>Replenishment Efficiency: {report.replenishment_efficiency_pct ?? "N/A"}%</Text>
+          <Text style={Font.label}>Wastage: {report.wastage ?? 0}</Text>
+        </View>
+      )}
 
       {/* Chart */}
       {topProducts.length > 0 ? (

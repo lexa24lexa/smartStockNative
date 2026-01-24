@@ -248,7 +248,7 @@ INSERT INTO BATCH (product_id, batch_code, expiration_date) VALUES
 (2, 'BATCH-OVERSTOCK', '2030-12-31'),
 (3, 'BATCH-NORMAL', '2030-12-31'),
 (4, 'BATCH-FRESH', '2030-12-31'),
-(5, 'BATCH-DANGER', DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY));
+(5, 'BATCH-DANGER', '2030-12-31');
 
 -- Stock
 INSERT INTO HAS_STOCK (store_id, batch_id, quantity, reorder_level) VALUES
@@ -268,11 +268,11 @@ INSERT INTO REPLENISHMENT_FREQUENCY (product_id, store_id, replenishment_frequen
 (1, 2, 2, NULL),
 (3, 2, 1, NULL);
 
--- Sales
-INSERT INTO SALE (store_id, total_amount) VALUES
-(1, 10.50),
-(1, 15.00),
-(2, 8.00);
+-- Sales (com datas em Janeiro 2026)
+INSERT INTO SALE (store_id, total_amount, date) VALUES
+(1, 10.50, '2026-01-05 10:30:00'),
+(1, 15.00, '2026-01-10 14:15:00'),
+(2, 8.00, '2026-01-12 09:00:00');
 
 -- Sale lines
 INSERT INTO SALE_LINE (sale_id, batch_id, quantity, subtotal) VALUES
@@ -284,8 +284,8 @@ INSERT INTO SALE_LINE (sale_id, batch_id, quantity, subtotal) VALUES
 
 -- Replenishment lists
 INSERT INTO REPLENISHMENT_LIST (store_id, list_date, status, notes) VALUES
-(1, CURRENT_DATE, 'draft', 'Weekly replenishment'),
-(2, CURRENT_DATE, 'completed', 'Berlin replenishment');
+(1, '2026-01-07', 'draft', 'Weekly replenishment'),
+(2, '2026-01-08', 'completed', 'Berlin replenishment');
 
 -- Replenishment list items
 INSERT INTO REPLENISHMENT_LIST_ITEM (list_id, product_id, quantity, current_stock, reason, priority, notes) VALUES
