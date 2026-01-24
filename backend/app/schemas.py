@@ -86,6 +86,7 @@ class StockOverviewResponse(BaseModel):
     reorder_level: int
     status: str
     progress: float
+    average_daily_sales: float
     days_to_out_of_stock: Optional[int]
     last_sale_at: Optional[datetime]
 

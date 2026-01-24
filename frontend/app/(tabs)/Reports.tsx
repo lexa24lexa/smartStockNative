@@ -161,12 +161,21 @@ export default function Reports() {
 
       {/* Table */}
       <View style={{ backgroundColor: Colors.bgCard, padding: Spacing.m, borderRadius: Radius.card }}>
-        <Text style={[Font.label, { marginBottom: Spacing.s }]}>Product     Qty Sold     Revenue</Text>
+        {/* Header */}
+        <View style={{ flexDirection: "row", marginBottom: Spacing.s }}>
+          <Text style={[Font.label, { flex: 2 }]}>Product</Text>
+          <Text style={[Font.label, { flex: 1, textAlign: "center" }]}>Qty Sold</Text>
+          <Text style={[Font.label, { flex: 1, textAlign: "right" }]}>Revenue</Text>
+        </View>
+
+        {/* Rows */}
         {topProducts.length > 0 ? (
-          topProducts.map(p => (
-            <Text key={p.product_id} style={[Font.meta, { marginBottom: Spacing.s }]}>
-              {p.name}     {p.qty_sold}     {p.revenue?.toFixed(2) ?? "0.00"}
-            </Text>
+          topProducts.map((p) => (
+            <View key={p.product_id} style={{ flexDirection: "row", marginBottom: Spacing.s }}>
+              <Text style={[Font.meta, { flex: 2 }]}>{p.name}</Text>
+              <Text style={[Font.meta, { flex: 1, textAlign: "center" }]}>{p.qty_sold}</Text>
+              <Text style={[Font.meta, { flex: 1, textAlign: "right" }]}>{p.revenue?.toFixed(2) ?? "0.00"}</Text>
+            </View>
           ))
         ) : (
           <Text style={[Font.meta, { marginBottom: Spacing.s }]}>No product sales data available</Text>

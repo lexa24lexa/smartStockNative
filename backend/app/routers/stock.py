@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas, database
 from ..services.stock_service import StockService, FIFOService
-from ..reports.stock_report import generate_stock_pdf_report, generate_stock_excel_report
+from ..services.stock_report import generate_stock_pdf_report, generate_stock_excel_report
 
 # Stock router
 router = APIRouter(prefix="/stock", tags=["Stock"])

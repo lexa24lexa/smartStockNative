@@ -3,7 +3,7 @@ from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException
-from datetime import datetime, timezone
+from datetime import timezone
 
 from .. import models, schemas
 
@@ -11,6 +11,7 @@ class StockService:
 
     @staticmethod
     def get_store(db: Session, store_id: int):
+        # Fetch store, raise 404 if not found
         store = db.query(models.Store).filter(models.Store.store_id == store_id).first()
         if not store:
             raise HTTPException(status_code=404, detail=f"Store with ID {store_id} not found")
@@ -18,8 +19,10 @@ class StockService:
 
     @staticmethod
     def create_stock(db: Session, stock_in: schemas.StockCreate):
+        # Ensure store exists
         store = StockService.get_store(db, stock_in.store_id)
 
+        # Ensure batch exists and active
         batch = db.query(models.Batch).filter(
             models.Batch.batch_id == stock_in.batch_id,
             models.Batch.is_active.is_(True)
@@ -27,6 +30,7 @@ class StockService:
         if not batch:
             raise HTTPException(status_code=404, detail="Batch not found or inactive")
 
+        # Ensure product is active
         product = db.query(models.Product).filter(
             models.Product.product_id == batch.product_id,
             models.Product.is_active.is_(True)
@@ -34,6 +38,7 @@ class StockService:
         if not product:
             raise HTTPException(status_code=400, detail="Batch belongs to an inactive product")
 
+        # Check if stock already exists for this batch in this store
         existing = db.query(models.Stock).filter(
             models.Stock.store_id == stock_in.store_id,
             models.Stock.batch_id == stock_in.batch_id
@@ -41,6 +46,7 @@ class StockService:
         if existing:
             raise HTTPException(status_code=400, detail="Stock already exists for this batch in this store")
 
+        # Create stock
         stock = models.Stock(**stock_in.dict())
         db.add(stock)
         db.commit()
@@ -49,6 +55,7 @@ class StockService:
 
     @staticmethod
     def update_stock(db: Session, stock_id: int, stock_in: schemas.StockUpdate):
+        # Update quantity or reorder level
         stock = db.query(models.Stock).filter(models.Stock.stock_id == stock_id).first()
         if not stock:
             raise HTTPException(status_code=404, detail="Stock not found")
@@ -64,6 +71,7 @@ class StockService:
 
     @staticmethod
     def delete_stock(db: Session, stock_id: int):
+        # Delete stock
         stock = db.query(models.Stock).filter(models.Stock.stock_id == stock_id).first()
         if not stock:
             raise HTTPException(status_code=404, detail="Stock not found")
@@ -72,6 +80,7 @@ class StockService:
 
     @staticmethod
     def get_store_stock(db: Session, store_id: int) -> List[schemas.StockResponse]:
+        # Fetch all stock in a store
         if store_id <= 0:
             raise HTTPException(status_code=400, detail="store_id must be positive")
 
@@ -96,13 +105,20 @@ class StockService:
 
     @staticmethod
     def get_store_stock_serialized(db: Session, store_id: int):
+        # Return stock in dict format
         return [
-            {'product_name': r.product_name, 'batch_code': r.batch_code, 'expiration_date': r.expiration_date, 'quantity': r.quantity}
+            {
+                'product_name': r.product_name,
+                'batch_code': r.batch_code,
+                'expiration_date': r.expiration_date,
+                'quantity': r.quantity
+            }
             for r in StockService.get_store_stock(db, store_id)
         ]
 
     @staticmethod
     def get_product_batches(db: Session, store_id: int, product_id: int) -> List[schemas.BatchStockResponse]:
+        # Fetch all batches of a product in a store, ordered FIFO
         if store_id <= 0 or product_id <= 0:
             raise HTTPException(status_code=400, detail="store_id and product_id must be positive integers")
 
@@ -131,6 +147,7 @@ class StockService:
 
     @staticmethod
     def get_stock_overview(db: Session, store_id: int):
+        # Overview of stock per product with status and forecast
         stock_rows = (
             db.query(
                 models.Product.product_id,
@@ -148,6 +165,7 @@ class StockService:
         results = []
 
         for row in stock_rows:
+            # Last sale date
             last_sale = (
                 db.query(func.max(models.Sale.date))
                 .join(models.SaleLine, models.Sale.sale_id == models.SaleLine.sale_id)
@@ -159,6 +177,7 @@ class StockService:
                 .scalar()
             )
 
+            # Total sold quantity
             total_sold = (
                 db.query(func.sum(models.SaleLine.quantity))
                 .join(models.Batch)
@@ -171,6 +190,7 @@ class StockService:
                 or 0
             )
 
+            # Count days with sales
             days = (
                 db.query(func.count(func.distinct(func.date(models.Sale.date))))
                 .join(models.SaleLine)
@@ -183,13 +203,14 @@ class StockService:
                 or 1
             )
 
-            avg_daily_sales = total_sold / days if days else 0
+            avg_daily_sales = round(total_sold / days) if days else 0
             days_to_oos = (
                 int(row.total_quantity / avg_daily_sales)
                 if avg_daily_sales > 0
                 else None
             )
 
+            # Stock status based on reorder level
             if row.total_quantity <= row.reorder_level:
                 status = "Critical"
             elif row.total_quantity <= row.reorder_level * 2:
@@ -197,6 +218,7 @@ class StockService:
             else:
                 status = "Stable"
 
+            # Progress bar ratio (0-1)
             progress = min(row.total_quantity / (row.reorder_level * 3), 1)
 
             results.append(
@@ -207,15 +229,17 @@ class StockService:
                     reorder_level=row.reorder_level,
                     status=status,
                     progress=progress,
+                    average_daily_sales=avg_daily_sales,
                     days_to_out_of_stock=days_to_oos,
                     last_sale_at=last_sale,
                 )
             )
 
         return results
-    
+
     @staticmethod
     def get_stock_predictions(db: Session, store_id: int):
+        # Predict stock changes based on average sales
         overview = StockService.get_stock_overview(db, store_id)
 
         predictions = []
@@ -254,6 +278,7 @@ class FIFOService:
 
     @staticmethod
     def _fifo_batches_for_product(db: Session, store_id: int, product_id: int):
+        # Fetch batches ordered by FIFO
         return db.query(models.Batch, models.Stock)\
             .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)\
             .filter(models.Stock.store_id == store_id,
@@ -265,12 +290,28 @@ class FIFOService:
 
     @staticmethod
     def check_fifo_violation(db: Session, store_id: int, product_id: int, selected_batch_id: int):
+        # Check if selected batch respects FIFO
         fifo_rows = FIFOService._fifo_batches_for_product(db, store_id, product_id)
         if not fifo_rows:
-            return {"is_violation": False, "message": "No stock available", "expected_batch_id": None, "expected_batch_code": None}
+            return {
+                "is_violation": False,
+                "message": "No stock available",
+                "expected_batch_id": None,
+                "expected_batch_code": None
+            }
 
         expected = fifo_rows[0][0]
         if expected.batch_id == selected_batch_id:
-            return {"is_violation": False, "message": "OK (FIFO respected)", "expected_batch_id": expected.batch_id, "expected_batch_code": expected.batch_code}
+            return {
+                "is_violation": False,
+                "message": "OK (FIFO respected)",
+                "expected_batch_id": expected.batch_id,
+                "expected_batch_code": expected.batch_code
+            }
 
-        return {"is_violation": True, "message": "FIFO violation: selected batch is not the next FIFO batch", "expected_batch_id": expected.batch_id, "expected_batch_code": expected.batch_code}
+        return {
+            "is_violation": True,
+            "message": "FIFO violation: selected batch is not the next FIFO batch",
+            "expected_batch_id": expected.batch_id,
+            "expected_batch_code": expected.batch_code
+        }

@@ -20,9 +20,10 @@ interface StockOverview {
   product_name: string;
   total_quantity: number;
   status: StockStatus;
-  progress: number; // 0..1
+  progress: number;
   days_to_out_of_stock?: number | null;
   last_sale_at?: string | null;
+  average_daily_sales?: number | null;
 }
 
 // Props for individual product row
@@ -62,7 +63,7 @@ function ProductRow({ item, onPress }: ProductRowProps) {
       onPress={onPress}
       style={({ pressed }) => [
         styles.productCard,
-        pressed && { opacity: 0.7 }, // Press feedback
+        pressed && { opacity: 0.7 },
       ]}
     >
       {/* Product name and status */}
@@ -92,6 +93,9 @@ function ProductRow({ item, onPress }: ProductRowProps) {
             : "Days to OOS: —"}
         </Text>
         <Text style={Font.meta}>{formatLastSale(item.last_sale_at)}</Text>
+        {item.average_daily_sales != null && (
+          <Text style={Font.meta}>Avg daily sales: {item.average_daily_sales.toFixed(2)}</Text>
+        )}
       </View>
     </Pressable>
   );
@@ -110,18 +114,25 @@ export default function Stock() {
 
   // Load stock data on mount
   React.useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch(`http://127.0.0.1:8000/stock/overview/${STORE_ID}`);
-        if (!res.ok) throw new Error("Failed to load stock");
-        const json = await res.json();
-        setData(json);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const load = async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/stock/overview/${STORE_ID}`);
+      if (!res.ok) throw new Error("Failed to load stock");
+      const json = await res.json();
+
+      const mapped: StockOverview[] = json.map((p: any) => ({
+        ...p,
+        average_daily_sales: p.average_daily_sales ?? 0,
+      }));
+
+      setData(mapped);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
     load();
   }, []);
 
