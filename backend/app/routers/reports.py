@@ -4,7 +4,7 @@ import csv
 import io
 import os
 import smtplib
-from datetime import datetime
+from datetime import date, datetime
 from email.message import EmailMessage
 from typing import Any, Dict, List, Optional
 
@@ -12,7 +12,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import APIRouter, Depends, HTTPException, Query, FastAPI
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 
 from app import models, database
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 _scheduler: Optional[BackgroundScheduler] = None
 _last_next_run: Optional[str] = None
 
+# Helper to get month start and end datetimes
 def _month_range(year: int, month: int):
     # Get first and last datetime of month
     if month < 1 or month > 12:
@@ -30,32 +31,40 @@ def _month_range(year: int, month: int):
     end = datetime(year + (month // 12), (month % 12) + 1, 1)
     return start, end
 
-def _build_monthly_report(db: Session, store_id: int, year: int, month: int) -> Dict[str, Any]:
-    # Build monthly report data
+# In _build_monthly_report add optional filters
+def _build_monthly_report(
+    db: Session,
+    store_id: int,
+    year: int,
+    month: int,
+    category_id: int | None = None,
+    product_id: int | None = None
+) -> dict[str, Any]:
     start, end = _month_range(year, month)
+
+    # summary metrics
     sale_count = (
         db.query(func.count(models.Sale.sale_id))
         .filter(models.Sale.store_id == store_id)
-        .filter(models.Sale.date >= start)
-        .filter(models.Sale.date < end)
+        .filter(models.Sale.date >= start, models.Sale.date < end)
         .scalar()
     ) or 0
     total_revenue = (
         db.query(func.coalesce(func.sum(models.Sale.total_amount), 0.0))
         .filter(models.Sale.store_id == store_id)
-        .filter(models.Sale.date >= start)
-        .filter(models.Sale.date < end)
+        .filter(models.Sale.date >= start, models.Sale.date < end)
         .scalar()
     ) or 0.0
     total_items_sold = (
         db.query(func.coalesce(func.sum(models.SaleLine.quantity), 0))
         .join(models.Sale, models.Sale.sale_id == models.SaleLine.sale_id)
         .filter(models.Sale.store_id == store_id)
-        .filter(models.Sale.date >= start)
-        .filter(models.Sale.date < end)
+        .filter(models.Sale.date >= start, models.Sale.date < end)
         .scalar()
     ) or 0
-    top_products_rows = (
+
+    # top products with optional filters
+    top_query = (
         db.query(
             models.Product.product_id,
             models.Product.name,
@@ -66,23 +75,104 @@ def _build_monthly_report(db: Session, store_id: int, year: int, month: int) -> 
         .join(models.SaleLine, models.SaleLine.batch_id == models.Batch.batch_id)
         .join(models.Sale, models.Sale.sale_id == models.SaleLine.sale_id)
         .filter(models.Sale.store_id == store_id)
-        .filter(models.Sale.date >= start)
-        .filter(models.Sale.date < end)
-        .group_by(models.Product.product_id, models.Product.name)
-        .order_by(func.sum(models.SaleLine.quantity).desc())
-        .limit(10)
-        .all()
+        .filter(models.Sale.date >= start, models.Sale.date < end)
     )
+
+    if category_id:
+        top_query = top_query.filter(models.Product.category_id == category_id)
+    if product_id:
+        top_query = top_query.filter(models.Product.product_id == product_id)
+
+    top_products_rows = top_query.group_by(models.Product.product_id, models.Product.name)\
+                                 .order_by(desc("qty_sold"))\
+                                 .limit(10)\
+                                 .all()
+
     top_products = [
         {"product_id": r.product_id, "name": r.name, "qty_sold": int(r.qty_sold or 0), "revenue": float(r.revenue or 0.0)}
         for r in top_products_rows
     ]
+
     return {
         "store_id": store_id,
         "year": year,
         "month": month,
         "period_start": start.isoformat(),
         "period_end": end.isoformat(),
+        "sale_count": int(sale_count),
+        "total_items_sold": int(total_items_sold),
+        "total_revenue": float(total_revenue),
+        "top_products": top_products,
+    }
+
+# In _build_daily_report add optional filters
+def _build_daily_report(
+    db: Session,
+    store_id: int,
+    report_date: datetime,
+    category_id: int | None = None,
+    product_id: int | None = None
+) -> dict[str, Any]:
+    # Start and end of the day
+    start = datetime(report_date.year, report_date.month, report_date.day)
+    end = start.replace(hour=23, minute=59, second=59)
+
+    # Summary metrics
+    sale_count = (
+        db.query(func.count(models.Sale.sale_id))
+        .filter(models.Sale.store_id == store_id)
+        .filter(models.Sale.date >= start, models.Sale.date <= end)
+        .scalar()
+    ) or 0
+
+    total_revenue = (
+        db.query(func.coalesce(func.sum(models.Sale.total_amount), 0.0))
+        .filter(models.Sale.store_id == store_id)
+        .filter(models.Sale.date >= start, models.Sale.date <= end)
+        .scalar()
+    ) or 0.0
+
+    total_items_sold = (
+        db.query(func.coalesce(func.sum(models.SaleLine.quantity), 0))
+        .join(models.Sale, models.Sale.sale_id == models.SaleLine.sale_id)
+        .filter(models.Sale.store_id == store_id)
+        .filter(models.Sale.date >= start, models.Sale.date <= end)
+        .scalar()
+    ) or 0
+
+    # Top products with optional filters
+    top_query = (
+        db.query(
+            models.Product.product_id,
+            models.Product.name,
+            func.sum(models.SaleLine.quantity).label("qty_sold"),
+            func.sum(models.SaleLine.subtotal).label("revenue"),
+        )
+        .join(models.Batch, models.Batch.product_id == models.Product.product_id)
+        .join(models.SaleLine, models.SaleLine.batch_id == models.Batch.batch_id)
+        .join(models.Sale, models.Sale.sale_id == models.SaleLine.sale_id)
+        .filter(models.Sale.store_id == store_id)
+        .filter(models.Sale.date >= start, models.Sale.date <= end)
+    )
+
+    if category_id:
+        top_query = top_query.filter(models.Product.category_id == category_id)
+    if product_id:
+        top_query = top_query.filter(models.Product.product_id == product_id)
+
+    top_products_rows = top_query.group_by(models.Product.product_id, models.Product.name)\
+                                 .order_by(desc("qty_sold"))\
+                                 .limit(10)\
+                                 .all()
+
+    top_products = [
+        {"product_id": r.product_id, "name": r.name, "qty_sold": int(r.qty_sold or 0), "revenue": float(r.revenue or 0.0)}
+        for r in top_products_rows
+    ]
+
+    return {
+        "store_id": store_id,
+        "report_date": report_date.isoformat(),
         "sale_count": int(sale_count),
         "total_items_sold": int(total_items_sold),
         "total_revenue": float(total_revenue),
@@ -178,40 +268,90 @@ def _ensure_scheduler_started():
     _last_next_run = job.next_run_time.isoformat() if job.next_run_time else None
 
 @router.get("/monthly")
+# Return monthly report for a store
 def get_monthly_report(
     store_id: int = Query(...),
-    year: Optional[int] = Query(None),
-    month: Optional[int] = Query(None),
+    year: int | None = Query(None),
+    month: int | None = Query(None),
+    category_id: int | None = Query(None),
+    product_id: int | None = Query(None),
     format: str = Query("json", pattern=r"^(json|csv)$"),
     db: Session = Depends(database.get_db),
 ):
-    # Return monthly report JSON or CSV
     _now = datetime.now()
     year = year or _now.year
     month = month or _now.month
-    report = _build_monthly_report(db, store_id, year, month)
+
+    report = _build_monthly_report(db, store_id, year, month, category_id, product_id)
+
     if format == "json":
         return report
+
     csv_text = _report_to_csv(report)
     filename = f"monthly_report_store{store_id}_{year}-{month:02d}.csv"
     return StreamingResponse(io.StringIO(csv_text), media_type="text/csv",
                              headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
-router.get("/daily")
+@router.get("/daily")
+# Return daily report for a store
 def get_daily_report(
     store_id: int = Query(...),
-    report_date: Optional[datetime] = Query(None),
+    report_date: datetime = Query(None),
+    category_id: int | None = Query(None),
+    product_id: int | None = Query(None),
     format: str = Query("json", pattern=r"^(json|csv)$"),
     db: Session = Depends(database.get_db),
 ):
     report_date = report_date or datetime.now()
-    report = _build_daily_report(db, store_id, report_date)
+    report = _build_daily_report(db, store_id, report_date, category_id, product_id)
+
     if format == "json":
         return report
+
     csv_text = _report_to_csv(report)
     filename = f"daily_report_store{store_id}_{report_date.date()}.csv"
     return StreamingResponse(io.StringIO(csv_text), media_type="text/csv",
                              headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+@router.get("/top-products")
+# Return top products for a store in a date range
+def top_products_report(
+    store_id: int,
+    start_date: date,
+    end_date: date,
+    category_id: int | None = None,
+    db: Session = Depends(database.get_db),
+):
+    query = (
+        db.query(
+            models.Product.product_id,
+            models.Product.name,
+            func.sum(models.SaleLine.quantity).label("qty_sold"),
+            func.sum(models.SaleLine.subtotal).label("revenue"),
+        )
+        .join(models.Batch, models.Batch.product_id == models.Product.product_id)
+        .join(models.SaleLine, models.SaleLine.batch_id == models.Batch.batch_id)
+        .join(models.Sale, models.Sale.sale_id == models.SaleLine.sale_id)
+        .filter(
+            models.Sale.store_id == store_id,
+            models.Sale.date.between(start_date, end_date),
+        )
+    )
+
+    if category_id:
+        query = query.filter(models.Product.category_id == category_id)
+
+    results = query.group_by(models.Product.product_id).order_by(desc("qty_sold")).all()
+
+    return [
+        {
+            "product_id": r.product_id,
+            "name": r.name,
+            "qty_sold": int(r.qty_sold or 0),
+            "revenue": float(r.revenue or 0),
+        }
+        for r in results
+    ]
 
 @router.get("/email/status")
 def email_status(db: Session = Depends(database.get_db)):
