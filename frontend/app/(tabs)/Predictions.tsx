@@ -4,6 +4,7 @@ import { BarChart } from "react-native-chart-kit";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Layout from "../../components/ui/Layout";
+import { Colors, Font, Spacing, Radius } from "../../constants/theme";
 
 dayjs.extend(relativeTime);
 
@@ -45,9 +46,22 @@ export default function Predictions() {
   }, []);
 
   // Loading state
-  if (loading) return <Layout><View style={styles.center}><ActivityIndicator size="large" /></View></Layout>;
+  if (loading) return (
+    <Layout>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    </Layout>
+  );
+
   // Error or no data
-  if (error || !data) return <Layout><View style={styles.center}><Text style={styles.errorText}>{error ?? "Something went wrong"}</Text></View></Layout>;
+  if (error || !data) return (
+    <Layout>
+      <View style={styles.center}>
+        <Text style={[Font.meta, { color: Colors.danger }]}>{error ?? "Something went wrong"}</Text>
+      </View>
+    </Layout>
+  );
 
   // Prepare chart data
   const categories = stockSales.map(c => c.category);
@@ -57,19 +71,19 @@ export default function Predictions() {
   const chartData = {
     labels: categories,
     datasets: [
-      { data: stockValues, color: () => "#059669" },
-      { data: salesValues, color: () => "#F59E0B" },
+      { data: stockValues, color: () => Colors.primary },
+      { data: salesValues, color: () => Colors.warning },
     ],
   };
 
-  const screenWidth = Dimensions.get("window").width - 32;
+  const screenWidth = Dimensions.get("window").width - Spacing.m * 2;
 
   return (
     <Layout>
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView contentContainerStyle={{ padding: Spacing.m }}>
         {/* Last updated */}
-        <Text style={styles.subtitle}>Updated {dayjs(data.last_updated).fromNow()}</Text>
-        <Text style={styles.title}>Stock vs Sales Trend</Text>
+        <Text style={Font.subtitle}>Updated {dayjs(data.last_updated).fromNow()}</Text>
+        <Text style={Font.title}>Stock vs Sales Trend</Text>
 
         {/* Bar chart: Stock vs Sales */}
         <View style={styles.chartCard}>
@@ -81,12 +95,12 @@ export default function Predictions() {
             yAxisLabel=""
             yAxisSuffix=""
             chartConfig={{
-              backgroundColor: "#fff",
-              backgroundGradientFrom: "#fff",
-              backgroundGradientTo: "#fff",
+              backgroundColor: Colors.bgCard,
+              backgroundGradientFrom: Colors.bgCard,
+              backgroundGradientTo: Colors.bgCard,
               decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+              color: () => Colors.textPrimary,
+              labelColor: () => Colors.textSecondary,
               barPercentage: 0.4,
             }}
             verticalLabelRotation={30}
@@ -95,16 +109,26 @@ export default function Predictions() {
           />
           {/* Chart legend */}
           <View style={styles.legendRow}>
-            <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: "#059669" }]} /><Text>Stock</Text></View>
-            <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: "#F59E0B" }]} /><Text>Sales</Text></View>
+            <View style={styles.legendItem}>
+              <View style={[styles.dot, { backgroundColor: Colors.primary }]} />
+              <Text style={Font.label}>Stock</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.dot, { backgroundColor: Colors.warning }]} />
+              <Text style={Font.label}>Sales</Text>
+            </View>
           </View>
         </View>
 
         {/* Predictions list */}
-        <Text style={styles.sectionTitle}>Automatic predictions</Text>
+        <Text style={Font.label}>Automatic predictions</Text>
         <View style={styles.listCard}>
           {data.predictions.map((p: any) => {
-            const color = p.predicted_stock_change_pct <= -20 ? "#DC2626" : p.predicted_stock_change_pct < 0 ? "#F59E0B" : "#059669";
+            const color = p.predicted_stock_change_pct <= -20
+              ? Colors.danger
+              : p.predicted_stock_change_pct < 0
+              ? Colors.warning
+              : Colors.primary;
             return (
               <PredictionRow
                 key={p.product_id}
@@ -128,12 +152,12 @@ function PredictionRow({ product, value, note, color }: { product: string; value
       {/* Product info */}
       <View style={styles.rowLeft}>
         <View style={[styles.dot, { backgroundColor: color }]} />
-        <Text style={styles.product}>{product}</Text>
+        <Text style={Font.label}>{product}</Text>
       </View>
       {/* Predicted value & note */}
       <View style={{ alignItems: "flex-end" }}>
-        <Text style={[styles.percent, { color }]}>{value}</Text>
-        <Text style={styles.meta}>{note}</Text>
+        <Text style={[Font.label, { color, fontWeight: "600" }]}>{value}</Text>
+        <Text style={Font.meta}>{note}</Text>
       </View>
     </View>
   );
@@ -141,18 +165,11 @@ function PredictionRow({ product, value, note, color }: { product: string; value
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  errorText: { color: "#DC2626", fontSize: 16 },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 16 },
-  subtitle: { color: "#6B7280", marginBottom: 8 },
-  chartCard: { backgroundColor: "#fff", padding: 12, borderRadius: 12, marginBottom: 20 },
-  legendRow: { flexDirection: "row", justifyContent: "flex-start", marginTop: 8, gap: 16 },
+  chartCard: { backgroundColor: Colors.bgCard, padding: Spacing.m, borderRadius: Radius.card, marginBottom: Spacing.l },
+  legendRow: { flexDirection: "row", marginTop: Spacing.s, gap: Spacing.m },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  sectionTitle: { fontWeight: "600", marginBottom: 12 },
-  listCard: { backgroundColor: "#fff", borderRadius: 12, padding: 16, gap: 16 },
+  listCard: { backgroundColor: Colors.bgCard, borderRadius: Radius.card, padding: Spacing.m, gap: Spacing.s },
   predictionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   rowLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  product: { fontWeight: "600" },
-  percent: { fontWeight: "600" },
-  meta: { fontSize: 12, color: "#6B7280" },
 });

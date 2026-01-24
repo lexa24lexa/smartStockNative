@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { StyleSheet, Switch, Text, View } from "react-native";
 import Layout from "../../components/ui/Layout";
+import { Colors, Font, Spacing, Radius } from "../../constants/theme";
 
 function ToggleRow({
   label,
@@ -13,7 +14,7 @@ function ToggleRow({
 }) {
   return (
     <View style={styles.toggleRow}>
-      <Text>{label}</Text>
+      <Text style={Font.label}>{label}</Text>
       <Switch value={value} onValueChange={onChange} />
     </View>
   );
@@ -27,10 +28,10 @@ export default function Settings() {
 
   return (
     <Layout>
-      <Text style={styles.title}>Settings</Text>
+      <Text style={Font.title}>Settings</Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Notification Preferences</Text>
+        <Text style={Font.subtitle}>Notification Preferences</Text>
 
         <ToggleRow
           label="Master Notifications"
@@ -55,55 +56,37 @@ export default function Settings() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Legal & Support</Text>
-        <Text style={styles.link}>Help & Support</Text>
-        <Text style={styles.link}>Privacy Policy</Text>
-        <Text style={styles.link}>Terms & Conditions</Text>
+        <Text style={Font.subtitle}>Legal & Support</Text>
+        <Text style={[Font.label, { paddingVertical: Spacing.s, color: Colors.primary }]}>Help & Support</Text>
+        <Text style={[Font.label, { paddingVertical: Spacing.s, color: Colors.primary }]}>Privacy Policy</Text>
+        <Text style={[Font.label, { paddingVertical: Spacing.s, color: Colors.primary }]}>Terms & Conditions</Text>
       </View>
 
       <View style={styles.clearCard}>
-        <Text style={styles.clearText}>Clear Cache</Text>
+        <Text style={[Font.label, { color: Colors.danger }]}>Clear Cache</Text>
       </View>
     </Layout>
   );
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 16,
-  },
-
   card: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
+    backgroundColor: Colors.bgCard,
+    padding: Spacing.m,
+    borderRadius: Radius.card,
+    marginBottom: Spacing.m,
   },
-  cardTitle: {
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-
   toggleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginVertical: 6,
+    marginVertical: Spacing.s,
   },
-
-  link: {
-    paddingVertical: 8,
-  },
-
   clearCard: {
-    backgroundColor: "#F3F4F6",
-    padding: 14,
-    borderRadius: 12,
+    backgroundColor: Colors.bgPage,
+    padding: Spacing.m,
+    borderRadius: Radius.card,
     alignItems: "center",
-  },
-  clearText: {
-    fontWeight: "600",
+    marginTop: Spacing.m,
   },
 });

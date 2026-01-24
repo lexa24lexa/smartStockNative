@@ -5,6 +5,7 @@ import { LineChart } from "react-native-chart-kit";
 import Layout from "../../components/ui/Layout";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import { Colors, Font, Spacing, Radius } from "../../constants/theme";
 
 // Types
 type TopProduct = { product_id: number; name: string; qty_sold: number; revenue: number };
@@ -47,12 +48,10 @@ export default function Reports() {
       const url = `http://127.0.0.1:8000/stock/${storeId}/daily-report?report_date=${day}&format=${format}`;
 
       if (Platform.OS === "web") {
-        // Web: open in new tab
         window.open(url, "_blank");
         return;
       }
 
-      // Mobile: use temporary file path
       const dir = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory;
       const localUri = `${dir}report-${day}.${fileExt}`;
 
@@ -76,36 +75,36 @@ export default function Reports() {
 
   const daysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 
-  if (loading) return <Layout><ActivityIndicator size="large" color="#000" /></Layout>;
-  if (!report) return <Layout><Text style={{ textAlign: "center", marginTop: 20 }}>No report data</Text></Layout>;
+  if (loading) return <Layout><ActivityIndicator size="large" color={Colors.primary} /></Layout>;
+  if (!report) return <Layout><Text style={[Font.meta, { textAlign: "center", marginTop: Spacing.l }]}>No report data</Text></Layout>;
 
   const topProducts = report.top_products ?? [];
   const chartData = {
     labels: topProducts.map(p => p.name),
-    datasets: [{ data: topProducts.map(p => p.qty_sold), color: () => "#4F46E5", strokeWidth: 2 }],
+    datasets: [{ data: topProducts.map(p => p.qty_sold), color: () => Colors.primary, strokeWidth: 2 }],
     legend: ["Qty Sold"],
   };
 
   return (
     <Layout>
-      <Text style={styles.title}>Reports</Text>
+      <Text style={Font.title}>Reports</Text>
 
       {/* Filters */}
-      <View style={styles.filters}>
-        <Text style={styles.filterLabel}>Year</Text>
-        <Picker selectedValue={year} onValueChange={setYear} style={styles.picker}>
+      <View style={{ marginBottom: Spacing.l }}>
+        <Text style={[Font.label, { marginBottom: Spacing.s }]}>Year</Text>
+        <Picker selectedValue={year} onValueChange={setYear} style={{ height: 50, width: "100%", marginBottom: Spacing.s }}>
           {Array.from({ length: 5 }, (_, i) => today.getFullYear() - i).map(y => <Picker.Item key={y} label={`${y}`} value={y} />)}
         </Picker>
 
-        <Text style={styles.filterLabel}>Month</Text>
-        <Picker selectedValue={month} onValueChange={setMonth} style={styles.picker}>
+        <Text style={[Font.label, { marginBottom: Spacing.s }]}>Month</Text>
+        <Picker selectedValue={month} onValueChange={setMonth} style={{ height: 50, width: "100%", marginBottom: Spacing.s }}>
           {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <Picker.Item key={m} label={`${m}`} value={m} />)}
         </Picker>
 
         {reportType === "daily" && (
           <>
-            <Text style={styles.filterLabel}>Day</Text>
-            <Picker selectedValue={day} onValueChange={setDay} style={styles.picker}>
+            <Text style={[Font.label, { marginBottom: Spacing.s }]}>Day</Text>
+            <Picker selectedValue={day} onValueChange={setDay} style={{ height: 50, width: "100%", marginBottom: Spacing.s }}>
               {Array.from({ length: daysInMonth(year, month) }, (_, i) => {
                 const value = `${year}-${month.toString().padStart(2, "0")}-${(i + 1).toString().padStart(2, "0")}`;
                 return <Picker.Item key={value} label={`${i + 1}`} value={value} />;
@@ -115,22 +114,22 @@ export default function Reports() {
         )}
 
         {/* Report type buttons */}
-        <View style={styles.buttonRow}>
+        <View style={{ flexDirection: "row", marginVertical: Spacing.s }}>
           <TouchableOpacity style={[styles.button, reportType === "monthly" && styles.activeButton]} onPress={() => setReportType("monthly")}>
-            <Text style={[styles.buttonText, reportType === "monthly" && styles.activeButtonText]}>Monthly</Text>
+            <Text style={[Font.label, reportType === "monthly" && { color: Colors.bgCard, fontWeight: "600" }]}>Monthly</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.button, reportType === "daily" && styles.activeButton]} onPress={() => setReportType("daily")}>
-            <Text style={[styles.buttonText, reportType === "daily" && styles.activeButtonText]}>Daily</Text>
+            <Text style={[Font.label, reportType === "daily" && { color: Colors.bgCard, fontWeight: "600" }]}>Daily</Text>
           </TouchableOpacity>
         </View>
 
         {/* Export buttons */}
-        <View style={styles.exportRow}>
+        <View style={{ flexDirection: "row", justifyContent: "space-around", marginTop: Spacing.m }}>
           <TouchableOpacity style={styles.exportButton} onPress={() => exportReport("pdf")}>
-            <Text style={styles.exportButtonText}>Export PDF</Text>
+            <Text style={[Font.label, { color: Colors.bgCard, textAlign: "center" }]}>Export PDF</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.exportButton} onPress={() => exportReport("excel")}>
-            <Text style={styles.exportButtonText}>Export Excel</Text>
+            <Text style={[Font.label, { color: Colors.bgCard, textAlign: "center" }]}>Export Excel</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -138,39 +137,39 @@ export default function Reports() {
       {/* Chart */}
       {topProducts.length > 0 ? (
         <>
-          <Text style={styles.subtitle}>Top Products Sold</Text>
+          <Text style={Font.subtitle}>Top Products Sold</Text>
           <LineChart
             data={chartData}
-            width={Dimensions.get("window").width - 32}
+            width={Dimensions.get("window").width - Spacing.m * 2}
             height={220}
             yAxisLabel=""
             chartConfig={{
-              backgroundColor: "#fff",
-              backgroundGradientFrom: "#fff",
-              backgroundGradientTo: "#fff",
+              backgroundColor: Colors.bgCard,
+              backgroundGradientFrom: Colors.bgCard,
+              backgroundGradientTo: Colors.bgCard,
               decimalPlaces: 0,
-              color: () => "#4F46E5",
-              labelColor: () => "#374151",
-              style: { borderRadius: 16 },
+              color: () => Colors.primary,
+              labelColor: () => Colors.textSecondary,
+              style: { borderRadius: Radius.card },
             }}
-            style={{ borderRadius: 16, marginVertical: 16 }}
+            style={{ borderRadius: Radius.card, marginVertical: Spacing.m }}
           />
         </>
       ) : (
-        <Text style={{ marginVertical: 16 }}>No product sales data available</Text>
+        <Text style={[Font.meta, { marginVertical: Spacing.m }]}>No product sales data available</Text>
       )}
 
       {/* Table */}
-      <View style={styles.table}>
-        <Text style={styles.tableHeader}>Product     Qty Sold     Revenue</Text>
+      <View style={{ backgroundColor: Colors.bgCard, padding: Spacing.m, borderRadius: Radius.card }}>
+        <Text style={[Font.label, { marginBottom: Spacing.s }]}>Product     Qty Sold     Revenue</Text>
         {topProducts.length > 0 ? (
           topProducts.map(p => (
-            <Text key={p.product_id} style={styles.tableRow}>
+            <Text key={p.product_id} style={[Font.meta, { marginBottom: Spacing.s }]}>
               {p.name}     {p.qty_sold}     {p.revenue?.toFixed(2) ?? "0.00"}
             </Text>
           ))
         ) : (
-          <Text style={styles.tableRow}>No product sales data available</Text>
+          <Text style={[Font.meta, { marginBottom: Spacing.s }]}>No product sales data available</Text>
         )}
       </View>
     </Layout>
@@ -178,20 +177,7 @@ export default function Reports() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 16 },
-  subtitle: { color: "#6B7280", fontWeight: "600", marginBottom: 8 },
-  filters: { marginBottom: 16 },
-  filterLabel: { fontWeight: "600", marginBottom: 4, color: "#374151" },
-  picker: { height: 50, width: "100%", marginBottom: 8 },
-  table: { backgroundColor: "#fff", padding: 16, borderRadius: 12 },
-  tableHeader: { fontWeight: "600", marginBottom: 8 },
-  tableRow: { color: "#6B7280", marginBottom: 4 },
-  buttonRow: { flexDirection: "row", marginVertical: 8 },
-  button: { flex: 1, padding: 8, backgroundColor: "#E5E7EB", borderRadius: 8, alignItems: "center", marginHorizontal: 4 },
-  activeButton: { backgroundColor: "#4F46E5" },
-  buttonText: { color: "#000", fontWeight: "600" },
-  activeButtonText: { color: "#fff" },
-  exportRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 12 },
-  exportButton: { backgroundColor: "#4F46E5", padding: 10, borderRadius: 8, flex: 1, marginHorizontal: 4 },
-  exportButtonText: { color: "#fff", fontWeight: "600", textAlign: "center" },
+  button: { flex: 1, padding: Spacing.s, backgroundColor: Colors.border, borderRadius: Radius.small, alignItems: "center", marginHorizontal: Spacing.s },
+  activeButton: { backgroundColor: Colors.primary },
+  exportButton: { backgroundColor: Colors.primary, padding: Spacing.s, borderRadius: Radius.small, flex: 1, marginHorizontal: Spacing.s },
 });

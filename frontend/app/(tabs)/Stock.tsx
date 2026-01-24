@@ -7,12 +7,9 @@ import {
   ActivityIndicator,
   FlatList,
 } from "react-native";
-import {
-  NavigationProp,
-  ParamListBase,
-  useNavigation,
-} from "@react-navigation/native";
+import { NavigationProp, ParamListBase, useNavigation } from "@react-navigation/native";
 import Layout from "../../components/ui/Layout";
+import { Colors, Font, Spacing, Radius } from "../../constants/theme";
 
 // Stock status type
 type StockStatus = "Stable" | "Low" | "Critical";
@@ -38,11 +35,11 @@ interface ProductRowProps {
 function statusColor(status: StockStatus) {
   switch (status) {
     case "Critical":
-      return "#DC2626";
+      return Colors.danger;
     case "Low":
-      return "#F59E0B";
+      return Colors.warning;
     default:
-      return "#059669";
+      return Colors.primary;
   }
 }
 
@@ -70,12 +67,12 @@ function ProductRow({ item, onPress }: ProductRowProps) {
     >
       {/* Product name and status */}
       <View style={styles.row}>
-        <Text style={styles.productName}>{item.product_name}</Text>
-        <Text style={{ color, fontWeight: "600" }}>● {item.status}</Text>
+        <Text style={Font.label}>{item.product_name}</Text>
+        <Text style={{ color, fontWeight: "600" as const }}>● {item.status}</Text>
       </View>
 
       {/* Total quantity */}
-      <Text style={styles.quantity}>{item.total_quantity}</Text>
+      <Text style={[Font.title, { marginVertical: 8 }]}>{item.total_quantity}</Text>
 
       {/* Stock progress bar */}
       <View style={styles.progressBackground}>
@@ -89,12 +86,12 @@ function ProductRow({ item, onPress }: ProductRowProps) {
 
       {/* Meta info: days to out-of-stock & last sale */}
       <View style={styles.metaRow}>
-        <Text style={styles.meta}>
+        <Text style={Font.meta}>
           {item.days_to_out_of_stock != null
             ? `Days to OOS: ${item.days_to_out_of_stock}d`
             : "Days to OOS: —"}
         </Text>
-        <Text style={styles.meta}>{formatLastSale(item.last_sale_at)}</Text>
+        <Text style={Font.meta}>{formatLastSale(item.last_sale_at)}</Text>
       </View>
     </Pressable>
   );
@@ -105,9 +102,9 @@ export default function Stock() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   // State
-  const [data, setData] = React.useState<StockOverview[]>([]); // Stock data
-  const [loading, setLoading] = React.useState(true); // Loading state
-  const [error, setError] = React.useState<string | null>(null); // Error state
+  const [data, setData] = React.useState<StockOverview[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
   const STORE_ID = 1;
 
@@ -118,36 +115,35 @@ export default function Stock() {
         const res = await fetch(`http://127.0.0.1:8000/stock/overview/${STORE_ID}`);
         if (!res.ok) throw new Error("Failed to load stock");
         const json = await res.json();
-        setData(json); // Save stock data
+        setData(json);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Unknown error"); // Save error
+        setError(e instanceof Error ? e.message : "Unknown error");
       } finally {
-        setLoading(false); // Done loading
+        setLoading(false);
       }
     };
-
     load();
   }, []);
 
   return (
     <Layout>
       {/* Page header */}
-      <Text style={styles.subtitle}>Live inventory</Text>
-      <Text style={styles.title}>Stock overview</Text>
+      <Text style={Font.subtitle}>Live inventory</Text>
+      <Text style={Font.title}>Stock overview</Text>
 
       {/* Loading indicator */}
       {loading && (
         <View style={styles.center}>
-          <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       )}
 
       {/* Error message */}
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && <Text style={[Font.meta, { color: Colors.danger }]}>{error}</Text>}
 
       {/* Empty state */}
       {!loading && !error && data.length === 0 && (
-        <Text style={styles.meta}>No stock available for this store.</Text>
+        <Text style={Font.meta}>No stock available for this store.</Text>
       )}
 
       {/* Stock list */}
@@ -163,32 +159,32 @@ export default function Stock() {
           />
         )}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: Spacing.l }}
       />
     </Layout>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 16 },
-  subtitle: { color: "#6B7280" },
-
   center: { marginTop: 32 },
 
-  error: { color: "#DC2626", marginVertical: 16 },
-
-  productCard: { backgroundColor: "#fff", padding: 16, borderRadius: 12, marginBottom: 12 },
+  productCard: {
+    backgroundColor: Colors.bgCard,
+    padding: Spacing.m,
+    borderRadius: Radius.card,
+    marginBottom: Spacing.m,
+  },
 
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
 
-  productName: { fontWeight: "600", fontSize: 16 },
-
-  quantity: { fontSize: 20, marginVertical: 8, fontWeight: "700" },
-
-  progressBackground: { height: 6, backgroundColor: "#E5E7EB", borderRadius: 3, overflow: "hidden" },
+  progressBackground: {
+    height: 6,
+    backgroundColor: Colors.border,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
 
   progressBar: { height: 6, borderRadius: 3 },
 
   metaRow: { marginTop: 6 },
-
-  meta: { fontSize: 12, color: "#6B7280" },
 });
