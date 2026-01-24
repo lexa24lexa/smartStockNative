@@ -12,6 +12,7 @@ import Layout from "../../components/ui/Layout";
 import { Colors, Font, Spacing, Radius } from "../../constants/theme";
 
 type StockStatus = "Stable" | "Low" | "Critical";
+type PriorityLevel = "High" | "Medium" | "Low";
 
 interface StockOverview {
   product_id: number;
@@ -44,6 +45,12 @@ function statusColor(status: StockStatus) {
   }
 }
 
+function calculatePriority(item: StockOverview): PriorityLevel {
+  if (item.status === "Critical") return "High";
+  if (item.status === "Low") return "Medium";
+  return "Low";
+}
+
 function formatLastSale(date?: string | null) {
   if (!date) return "No sales yet";
   const d = new Date(date);
@@ -53,6 +60,7 @@ function formatLastSale(date?: string | null) {
 function ProductRow({ item, onPress }: ProductRowProps) {
   const color = statusColor(item.status);
   const formatDate = (date?: string | null) => (date ? new Date(date).toLocaleDateString() : "—");
+  const priority = calculatePriority(item);
 
   return (
     <Pressable
@@ -86,6 +94,7 @@ function ProductRow({ item, onPress }: ProductRowProps) {
         <Text style={Font.meta}>Next replenishment: {formatDate(item.next_replenishment_date)}</Text>
         <Text style={Font.meta}>Suggested qty: {item.quantity ?? 0}</Text>
         <Text style={Font.meta}>Shelf facing: {item.facing ?? 0}</Text>
+        <Text style={[Font.meta, { fontWeight: "700" }]}>Replenishment priority: {priority}</Text>
       </View>
     </Pressable>
   );
@@ -115,6 +124,13 @@ export default function Stock() {
         }));
 
         setData(mapped);
+
+        const sorted = mapped.sort((a, b) => {
+          const priorityMap = { High: 3, Medium: 2, Low: 1 };
+          return priorityMap[calculatePriority(b)] - priorityMap[calculatePriority(a)];
+        });
+        setData(sorted);
+
       } catch (e) {
         setError(e instanceof Error ? e.message : "Unknown error");
       } finally {
