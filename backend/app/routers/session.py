@@ -24,7 +24,7 @@ class CurrentUserOut(BaseModel):
     is_active: bool
 
     class Config:
-        from_attributes = True  # Allows SQLAlchemy objects to be returned directly
+        from_attributes = True
 
 # Set current user
 @router.post("/user", response_model=CurrentUserOut)

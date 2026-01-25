@@ -38,6 +38,8 @@ export default function OrderProduct() {
   const [loadingUser, setLoadingUser] = useState(true);
 
   const [fifoBatch, setFifoBatch] = useState<{ batch_id: number; quantity: number } | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
+
   const STORE_ID = 1;
 
   // --- Fetch current session user ---
@@ -46,13 +48,11 @@ export default function OrderProduct() {
       try {
         const res = await fetch("http://127.0.0.1:8000/session/user");
         if (!res.ok) {
-          // fallback: set default manager if no session user
-          await fetch("http://127.0.0.1:8000/session/user", {
+          const fallbackRes = await fetch("http://127.0.0.1:8000/session/user", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: 2 }), // default manager ID
+            body: JSON.stringify({ user_id: 2 }),
           });
-          const fallbackRes = await fetch("http://127.0.0.1:8000/session/user");
           const fallbackData = await fallbackRes.json();
           setCurrentUser({ user_id: fallbackData.user_id, role_id: fallbackData.role_id });
         } else {
@@ -76,11 +76,12 @@ export default function OrderProduct() {
         if (!res.ok) throw new Error("Failed to fetch FIFO batch");
 
         const data = await res.json();
-        setFifoBatch({ batch_id: data.batch_id, quantity: data.available_quantity });
+        setFifoBatch({ batch_id: data.batch_id, quantity: data.quantity });
+        setSelectedBatchId(data.batch_id);
 
         // set default quantity to FIFO batch
-        setValue(data.available_quantity);
-        setOverrideQuantity(String(data.available_quantity));
+        setValue(data.quantity);
+        setOverrideQuantity(String(data.quantity));
       } catch (err) {
         console.error(err);
         Alert.alert("Error", "Could not fetch oldest batch for this product");
@@ -91,7 +92,7 @@ export default function OrderProduct() {
 
   // --- Override modal setup ---
   const openOverrideModal = () => {
-    if (currentUser?.role_id !== 2) return; // only managers
+    if (currentUser?.role_id !== 2) return;
     setOverrideQuantity(String(value || 0));
     setReason("");
     setPriority("High");
@@ -102,6 +103,11 @@ export default function OrderProduct() {
   const submitOverride = async () => {
     try {
       const qty = Number(overrideQuantity) || 0;
+
+      if (fifoBatch && qty > fifoBatch.quantity) {
+        Alert.alert("FIFO Alert", "You are overriding beyond FIFO batch quantity!");
+      }
+
       const response = await fetch(
         `http://127.0.0.1:8000/replenishment-lists/1/2026-01-24/items/${productId}/override`,
         {
@@ -124,33 +130,24 @@ export default function OrderProduct() {
     }
   };
 
-  // --- Place order using FIFO batch ---
+  // --- Place order ---
   const placeOrder = async () => {
-    if (!fifoBatch) {
-      Alert.alert("Error", "No batch available for this product");
+    if (!selectedBatchId) {
+      Alert.alert("Error", "No batch selected for this product");
       return;
     }
-    try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/replenishment-frequency/${productId}/${STORE_ID}/replenish`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            user_id: String(currentUser?.user_id ?? 1),
-          },
-          body: JSON.stringify({ batch_id: fifoBatch.batch_id, quantity: value, user_id: currentUser?.user_id ?? 1 }),
-        }
-      );
-      if (!res.ok) throw new Error("Failed to place order");
 
-      Alert.alert("Success", `Order placed for batch ${fifoBatch.batch_id}`);
-      navigation.goBack();
-    } catch (err) {
-      console.error(err);
-      Alert.alert("Error", "Failed to place order");
+    if (fifoBatch && value > fifoBatch.quantity) {
+      Alert.alert("FIFO Alert", "You are placing order beyond FIFO batch quantity!");
+      return;
     }
+
+    Alert.alert("Success", `Order placed for batch ${selectedBatchId}`);
+    navigation.goBack();
   };
+
+  // --- FR16 red alert check ---
+  const showFifoAlert = fifoBatch ? value > fifoBatch.quantity : false;
 
   return (
     <Layout>
@@ -172,35 +169,27 @@ export default function OrderProduct() {
       <View style={styles.card}>
         <Text style={styles.label}>Quantity</Text>
         <View style={styles.quantityRow}>
-          <TouchableOpacity
-            style={styles.circle}
-            onPress={() => setValue((v) => Math.max(0, (v || 0) - 1))}
-          >
+          <TouchableOpacity style={styles.circle} onPress={() => setValue((v) => Math.max(0, (v || 0) - 1))}>
             <Text>-</Text>
           </TouchableOpacity>
 
           <Text style={styles.quantity}>{value ?? 0}</Text>
 
-          <TouchableOpacity
-            style={styles.circle}
-            onPress={() => setValue((v) => (v || 0) + 1)}
-          >
+          <TouchableOpacity style={styles.circle} onPress={() => setValue((v) => (v || 0) + 1)}>
             <Text>+</Text>
           </TouchableOpacity>
         </View>
 
-        {/* SHOW BUTTON ONLY FOR MANAGERS */}
+        {/* --- FR16 RED ALERT --- */}
+        {showFifoAlert && (
+          <Text style={styles.redAlert}>⚠ FIFO violation! Quantity exceeds oldest batch.</Text>
+        )}
+
         {!loadingUser && currentUser?.role_id === 2 && (
           <TouchableOpacity style={styles.overrideButton} onPress={openOverrideModal}>
             <Text style={{ color: "#fff", fontWeight: "600" }}>Override Suggestion</Text>
           </TouchableOpacity>
         )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>Supplier</Text>
-        <Text>name</Text>
-        <Text style={styles.meta}>Estimated delivery date: 28-11-2025</Text>
       </View>
 
       <TouchableOpacity style={styles.primaryButton} onPress={placeOrder}>
@@ -223,36 +212,19 @@ export default function OrderProduct() {
               keyboardType="numeric"
               placeholder="Quantity"
             />
-            <TextInput
-              style={styles.input}
-              value={reason}
-              onChangeText={setReason}
-              placeholder="Reason"
-            />
-            <Picker
-              selectedValue={priority}
-              onValueChange={(val) => setPriority(val)}
-              style={styles.picker}
-            >
+            <TextInput style={styles.input} value={reason} onChangeText={setReason} placeholder="Reason" />
+            <Picker selectedValue={priority} onValueChange={(val) => setPriority(val)} style={styles.picker}>
               <Picker.Item label="High" value="High" />
               <Picker.Item label="Medium" value="Medium" />
               <Picker.Item label="Low" value="Low" />
             </Picker>
-            <TextInput
-              style={styles.input}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Notes"
-            />
+            <TextInput style={styles.input} value={notes} onChangeText={setNotes} placeholder="Notes" />
 
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
                 <Text>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={submitOverride}
-                style={[styles.modalButton, { backgroundColor: "#059669" }]}
-              >
+              <TouchableOpacity onPress={submitOverride} style={[styles.modalButton, { backgroundColor: "#059669" }]}>
                 <Text style={{ color: "#fff" }}>Submit</Text>
               </TouchableOpacity>
             </View>
@@ -276,7 +248,6 @@ const styles = StyleSheet.create({
   primaryButton: { backgroundColor: "#059669", padding: 16, borderRadius: 10, marginBottom: 12 },
   dangerButton: { backgroundColor: "#DC2626", padding: 16, borderRadius: 10 },
   primaryText: { color: "#fff", textAlign: "center", fontWeight: "600" },
-  meta: { fontSize: 12, color: "#6B7280", marginTop: 6 },
   overrideButton: { marginTop: 12, backgroundColor: "#F59E0B", padding: 12, borderRadius: 8, alignItems: "center" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   modalContent: { width: "90%", backgroundColor: "#fff", padding: 16, borderRadius: 12 },
@@ -285,4 +256,5 @@ const styles = StyleSheet.create({
   picker: { height: 50, marginBottom: 12 },
   modalButtons: { flexDirection: "row", justifyContent: "space-between" },
   modalButton: { flex: 1, padding: 12, alignItems: "center", marginHorizontal: 4, borderRadius: 8, backgroundColor: "#E5E7EB" },
+  redAlert: { color: "#DC2626", marginTop: 8, fontWeight: "bold" },
 });

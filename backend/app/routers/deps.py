@@ -2,7 +2,7 @@ from fastapi import HTTPException, Depends
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import User
-from .session import current_user as session_user  # import in-memory current user
+from .session import current_user as session_user
 
 def get_current_user(db: Session = Depends(get_db)) -> User:
     """
