@@ -79,6 +79,16 @@ class StockResponse(BaseModel):
     expiration_date: Optional[str]
     quantity: int
 
+class StockOverviewResponse(BaseModel):
+    product_id: int
+    product_name: str
+    total_quantity: int
+    reorder_level: int
+    status: str
+    progress: float
+    days_to_out_of_stock: Optional[int]
+    last_sale_at: Optional[datetime]
+
 class BatchStockResponse(BaseModel):
     batch_id: int
     batch_code: str
