@@ -11,6 +11,7 @@ export const Colors = {
   bgCard: "#fff",
   bgPage: "#F3F4F6",
   border: "#E5E7EB",
+  success: "#10B981",
 };
 
 export const Radius = {

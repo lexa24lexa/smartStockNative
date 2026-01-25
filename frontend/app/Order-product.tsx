@@ -20,13 +20,19 @@ type RouteParams = {
   };
 };
 
+type FifoBatch = {
+  batch_id: number;
+  batch_code: string;
+  quantity: number;
+  expiration_date: string | null;
+};
+
 export default function OrderProduct() {
   const route = useRoute<RouteProp<RouteParams, "OrderProduct">>();
   const navigation = useNavigation();
 
   const { product, quantity, productId } = route.params;
 
-  // --- State initialization ---
   const [value, setValue] = useState<number>(Number(quantity) || 0);
   const [overrideQuantity, setOverrideQuantity] = useState<string>(String(Number(quantity) || 0));
   const [modalVisible, setModalVisible] = useState(false);
@@ -37,8 +43,10 @@ export default function OrderProduct() {
   const [currentUser, setCurrentUser] = useState<{ user_id: number; role_id: number } | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
-  const [fifoBatch, setFifoBatch] = useState<{ batch_id: number; quantity: number } | null>(null);
+  const [fifoBatch, setFifoBatch] = useState<FifoBatch | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
+
+  const [orderConfirmation, setOrderConfirmation] = useState<any | null>(null);
 
   const STORE_ID = 1;
 
@@ -76,10 +84,9 @@ export default function OrderProduct() {
         if (!res.ok) throw new Error("Failed to fetch FIFO batch");
 
         const data = await res.json();
-        setFifoBatch({ batch_id: data.batch_id, quantity: data.quantity });
+        setFifoBatch({ batch_id: data.batch_id, batch_code: data.batch_code, quantity: data.quantity, expiration_date: data.expiration_date });
         setSelectedBatchId(data.batch_id);
 
-        // set default quantity to FIFO batch
         setValue(data.quantity);
         setOverrideQuantity(String(data.quantity));
       } catch (err) {
@@ -100,53 +107,137 @@ export default function OrderProduct() {
     setModalVisible(true);
   };
 
+  // --- Submit override ---
   const submitOverride = async () => {
+    if (!selectedBatchId || !fifoBatch) {
+      Alert.alert("Error", "No batch selected");
+      return;
+    }
+
     try {
       const qty = Number(overrideQuantity) || 0;
 
-      if (fifoBatch && qty > fifoBatch.quantity) {
-        Alert.alert("FIFO Alert", "You are overriding beyond FIFO batch quantity!");
+      // 1️⃣ Optional FIFO check
+      if (qty > fifoBatch.quantity && currentUser?.role_id !== 2) {
+        Alert.alert("FIFO Violation", "Employees cannot override oldest batch quantity.");
+        return;
       }
 
-      const response = await fetch(
-        `http://127.0.0.1:8000/replenishment-lists/1/2026-01-24/items/${productId}/override`,
+      if (qty > fifoBatch.quantity && currentUser?.role_id === 2) {
+        Alert.alert("FIFO Alert", "⚠ Quantity exceeds oldest batch. Manager override applied.");
+      }
+
+      // 2️⃣ Send PATCH to record replenishment (same as placeOrder)
+      const res = await fetch(
+        `http://127.0.0.1:8000/replenishment-frequency/${productId}/${STORE_ID}/replenish`,
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            user_id: String(currentUser?.user_id ?? 1),
-          },
-          body: JSON.stringify({ quantity: qty, reason, priority, notes }),
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            batch_id: selectedBatchId,
+            quantity: qty,
+            user_id: currentUser?.user_id,
+            expiration_date: fifoBatch.expiration_date,
+            replenishment_date: new Date().toISOString().split("T")[0],
+          }),
         }
       );
-      if (!response.ok) throw new Error("Failed to override");
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to place order");
+      }
+
+      const data = await res.json();
+
+      setOrderConfirmation({
+        product_name: product,
+        batch_id: fifoBatch.batch_id,
+        batch_code: fifoBatch.batch_code,
+        quantity_ordered: qty,
+        expiration_date: fifoBatch.expiration_date,
+        priority,
+        replenishment_frequency: data.replenishment_frequency,
+        last_replenishment_date: data.last_replenishment_date,
+        notes,
+        reason,
+      });
 
       setValue(qty);
       setModalVisible(false);
-      Alert.alert("Success", "Override applied!");
-    } catch (err) {
+      Alert.alert("Success", "Override order placed successfully!");
+    } catch (err: any) {
       console.error(err);
-      Alert.alert("Error", "Failed to override item");
+      Alert.alert("Error", err.message);
     }
   };
 
   // --- Place order ---
   const placeOrder = async () => {
-    if (!selectedBatchId) {
-      Alert.alert("Error", "No batch selected for this product");
+    if (!selectedBatchId || !fifoBatch) {
+      Alert.alert("Error", "No batch selected");
       return;
     }
 
-    if (fifoBatch && value > fifoBatch.quantity) {
-      Alert.alert("FIFO Alert", "You are placing order beyond FIFO batch quantity!");
+    const isFifoViolation = value > fifoBatch.quantity;
+
+    if (isFifoViolation && currentUser?.role_id !== 2) {
+      Alert.alert(
+        "FIFO Violation",
+        "Quantity exceeds oldest batch! Employees cannot override FIFO."
+      );
       return;
     }
 
-    Alert.alert("Success", `Order placed for batch ${selectedBatchId}`);
-    navigation.goBack();
+    if (isFifoViolation && currentUser?.role_id === 2) {
+      Alert.alert(
+        "FIFO Alert",
+        "⚠ Quantity exceeds oldest batch. You may override using the button if needed."
+      );
+    }
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8000/replenishment-frequency/${productId}/${STORE_ID}/replenish`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            batch_id: selectedBatchId,
+            quantity: value,
+            user_id: currentUser?.user_id ?? 1,
+            expiration_date: fifoBatch.expiration_date,
+            replenishment_date: new Date().toISOString().split("T")[0],
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to place order");
+      }
+
+      const data = await res.json();
+
+      setOrderConfirmation({
+        product_name: product,
+        batch_id: fifoBatch.batch_id,
+        batch_code: fifoBatch.batch_code,
+        quantity_ordered: value,
+        expiration_date: fifoBatch.expiration_date,
+        priority: "High",
+        replenishment_frequency: data.replenishment_frequency,
+        last_replenishment_date: data.last_replenishment_date,
+      });
+
+      Alert.alert("Success", "Order placed successfully");
+
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert("Error", err.message);
+    }
   };
 
-  // --- FR16 red alert check ---
   const showFifoAlert = fifoBatch ? value > fifoBatch.quantity : false;
 
   return (
@@ -180,7 +271,6 @@ export default function OrderProduct() {
           </TouchableOpacity>
         </View>
 
-        {/* --- FR16 RED ALERT --- */}
         {showFifoAlert && (
           <Text style={styles.redAlert}>⚠ FIFO violation! Quantity exceeds oldest batch.</Text>
         )}
@@ -199,6 +289,18 @@ export default function OrderProduct() {
       <TouchableOpacity style={styles.dangerButton} onPress={() => navigation.goBack()}>
         <Text style={styles.primaryText}>Cancel order</Text>
       </TouchableOpacity>
+
+      {orderConfirmation && (
+        <View style={[styles.card, { backgroundColor: "#D1FAE5" }]}>
+          <Text style={{ fontWeight: "bold", fontSize: 18 }}>{orderConfirmation.product_name}</Text>
+          <Text>Batch: {orderConfirmation.batch_code}</Text>
+          <Text>Quantity ordered: {orderConfirmation.quantity_ordered}</Text>
+          <Text>Replenishment priority: {orderConfirmation.priority}</Text>
+          <Text>Last replenishment: {orderConfirmation.last_replenishment_date ?? "—"}</Text>
+          <Text>Replenishment frequency: every {orderConfirmation.replenishment_frequency} day(s)</Text>
+          <Text>Expiration date: {orderConfirmation.expiration_date ?? "—"}</Text>
+        </View>
+      )}
 
       <Modal visible={modalVisible} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>

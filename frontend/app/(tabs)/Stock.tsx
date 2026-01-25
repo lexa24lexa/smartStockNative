@@ -157,6 +157,10 @@ export default function Stock() {
   const [movementModalVisible, setMovementModalVisible] = React.useState(false);
   const [movements, setMovements] = React.useState<StockMovement[]>([]);
   const [movementsLoading, setMovementsLoading] = React.useState(false);
+
+  // New state for order confirmation
+  const [confirmationMessage, setConfirmationMessage] = React.useState<string | null>(null);
+
   const STORE_ID = 1;
 
   React.useEffect(() => {
@@ -245,10 +249,23 @@ export default function Stock() {
     }
   };
 
+  // New function to show confirmation
+  const showConfirmation = (message: string) => {
+    setConfirmationMessage(message);
+    setTimeout(() => setConfirmationMessage(null), 3000); // hide after 3 seconds
+  };
+
   return (
     <Layout>
       <Text style={Font.subtitle}>Live inventory</Text>
       <Text style={Font.title}>Stock overview</Text>
+
+      {/* Confirmation message */}
+      {confirmationMessage && (
+        <View style={styles.confirmationBanner}>
+          <Text style={[Font.label, { color: "#fff" }]}>{confirmationMessage}</Text>
+        </View>
+      )}
 
       {loading && (
         <View style={styles.center}>
@@ -268,7 +285,10 @@ export default function Stock() {
         renderItem={({ item }) => (
           <ProductRow
             item={item}
-            onPress={() => navigation.navigate("Order-product", { productId: item.product_id })}
+            onPress={() => {
+              navigation.navigate("Order-product", { productId: item.product_id });
+              showConfirmation(`${item.product_name} order submitted successfully!`);
+            }}
             onViewHistory={() => viewHistory(item.product_id)}
             onViewMovements={() => viewMovements(item.product_id)}
           />
@@ -390,4 +410,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   closeButtonText: { color: "#fff", fontWeight: "700" },
+
+  // Confirmation banner style
+  confirmationBanner: {
+    backgroundColor: Colors.success || "#28a745",
+    padding: Spacing.m,
+    borderRadius: Radius.small,
+    marginBottom: Spacing.m,
+    alignItems: "center",
+  },
 });
