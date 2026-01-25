@@ -117,7 +117,6 @@ export default function OrderProduct() {
     try {
       const qty = Number(overrideQuantity) || 0;
 
-      // 1️⃣ Optional FIFO check
       if (qty > fifoBatch.quantity && currentUser?.role_id !== 2) {
         Alert.alert("FIFO Violation", "Employees cannot override oldest batch quantity.");
         return;
@@ -127,7 +126,6 @@ export default function OrderProduct() {
         Alert.alert("FIFO Alert", "⚠ Quantity exceeds oldest batch. Manager override applied.");
       }
 
-      // 2️⃣ Send PATCH to record replenishment (same as placeOrder)
       const res = await fetch(
         `http://127.0.0.1:8000/replenishment-frequency/${productId}/${STORE_ID}/replenish`,
         {

@@ -10,8 +10,6 @@ from ..database import get_db
 
 router = APIRouter()
 
-# Replenishment Frequency CRUD
-
 # Create or update a replenishment frequency for a product at a store
 @router.post("/replenishment-frequency", response_model=schemas.ReplenishmentFrequencyResponse)
 def create_replenishment_frequency(frequency_data: schemas.ReplenishmentFrequencyCreate, db: Session = Depends(database.get_db)):
@@ -115,11 +113,9 @@ def record_replenishment(product_id: int, store_id: int, replenishment_data: sch
 
     from sqlalchemy.exc import SQLAlchemyError
     try:
-        # Update frequency
         frequency.last_replenishment_date = replenishment_date
         db.add(frequency)
 
-        # Create log
         log = models.ReplenishmentLog(
             product_id=product_id,
             store_id=store_id,
@@ -130,16 +126,13 @@ def record_replenishment(product_id: int, store_id: int, replenishment_data: sch
         )
         db.add(log)
 
-        # Commit everything at once
         db.commit()
 
-        # Refresh objects after commit
         db.refresh(frequency)
         db.refresh(log)
 
     except SQLAlchemyError as e:
         db.rollback()
-        print("SQLAlchemyError occurred:", e)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     return frequency
