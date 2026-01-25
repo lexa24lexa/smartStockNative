@@ -548,3 +548,27 @@ def override_replenishment_item(
         priority=item.priority,
         notes=item.notes
     )
+
+def get_fifo_batch(db: Session, store_id: int, product_id: int):
+    batch = (
+        db.query(models.Stock)
+        .join(models.Batch, models.Stock.batch_id == models.Batch.batch_id)
+        .filter(models.Stock.store_id == store_id)
+        .filter(models.Batch.product_id == product_id)
+        .order_by(models.Batch.expiration_date.asc())
+        .first()
+    )
+    if not batch:
+        raise HTTPException(status_code=404, detail="No stock available for replenishment")
+    return batch
+
+@router.get("/replenishment/{store_id}/{product_id}")
+def get_replenishment_batch(store_id: int, product_id: int, db: Session = Depends(database.get_db)):
+    stock_item = get_fifo_batch(db, store_id, product_id)
+    return {
+        "stock_id": stock_item.stock_id,
+        "batch_id": stock_item.batch.batch_id,
+        "batch_code": stock_item.batch.batch_code,
+        "quantity": stock_item.quantity,
+        "expiration_date": stock_item.batch.expiration_date
+    }

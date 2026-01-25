@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import User
+from ..database import SessionLocal
 
 router = APIRouter(prefix="/session", tags=["Session"])
 
@@ -32,7 +33,6 @@ def set_current_user(user_in: CurrentUserIn, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     global current_user
-    # Convert SQLAlchemy object to dict for in-memory storage
     current_user = {
         "user_id": user.user_id,
         "username": user.username,
@@ -48,3 +48,14 @@ def get_current_user():
     if not current_user:
         raise HTTPException(status_code=404, detail="No user selected")
     return current_user
+
+with SessionLocal() as db:
+    user = db.query(User).filter(User.user_id == 1, User.is_active == True).first()
+    if user:
+        current_user = {
+            "user_id": user.user_id,
+            "username": user.username,
+            "role_id": user.role_id,
+            "store_id": user.store_id,
+            "is_active": user.is_active
+        }

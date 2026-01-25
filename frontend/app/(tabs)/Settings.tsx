@@ -28,20 +28,28 @@ export default function Settings() {
   const [reaching, setReaching] = useState(true);
 
   // User selector
-  const [userId, setUserId] = useState<number | undefined>(undefined);
+  const [currentUser, setCurrentUser] = useState<{
+    user_id: number;
+    role_id: number;
+  } | null>(null);
+
+  const [loading, setLoading] = useState(true);
 
   // Fetch current user from backend
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/session/user");
+      if (!res.ok) return;
+      const data = await res.json();
+      setCurrentUser({ user_id: data.user_id, role_id: data.role_id });
+    } catch (err) {
+      console.error("Error fetching current user:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchCurrentUser = async () => {
-      try {
-        const res = await fetch("http://127.0.0.1:8000/session/user");
-        if (!res.ok) return;
-        const data = await res.json();
-        setUserId(data.user_id);
-      } catch (err) {
-        console.error("Error fetching current user:", err);
-      }
-    };
     fetchCurrentUser();
   }, []);
 
@@ -54,6 +62,11 @@ export default function Settings() {
         body: JSON.stringify({ user_id: id }),
       });
       if (!res.ok) throw new Error("Failed to save user");
+
+      // Fetch again to get role info
+      const userRes = await fetch("http://127.0.0.1:8000/session/user");
+      const data = await userRes.json();
+      setCurrentUser({ user_id: data.user_id, role_id: data.role_id });
     } catch (err) {
       console.error("Error saving current user:", err);
     }
@@ -66,19 +79,21 @@ export default function Settings() {
       {/* User / Role Selector */}
       <View style={styles.card}>
         <Text style={Font.subtitle}>Current User</Text>
+        {!loading && (
           <Picker
-            selectedValue={userId}
-            onValueChange={(value: number) => {
-              setUserId(value);
-              saveCurrentUser(value);
-            }}
+            selectedValue={currentUser?.user_id}
+            onValueChange={(value: number) => saveCurrentUser(value)}
             style={{ color: Colors.primary }}
           >
             <Picker.Item label="John Employee" value={1} />
             <Picker.Item label="Anna Manager" value={2} />
           </Picker>
+        )}
         <Text style={[Font.label, { marginTop: Spacing.s }]}>
-          Selected User ID: {userId ?? "loading..."}
+          Selected User ID: {currentUser?.user_id ?? "loading..."}
+        </Text>
+        <Text style={[Font.label, { marginTop: Spacing.s }]}>
+          Role: {currentUser?.role_id === 2 ? "Manager" : "Employee"}
         </Text>
       </View>
 

@@ -15,8 +15,8 @@ import Layout from "../components/ui/Layout";
 type RouteParams = {
   OrderProduct: {
     product: string;
+    productId: number;
     quantity: number;
-    userId?: number;
   };
 };
 
@@ -24,9 +24,9 @@ export default function OrderProduct() {
   const route = useRoute<RouteProp<RouteParams, "OrderProduct">>();
   const navigation = useNavigation();
 
-  const { product, quantity } = route.params;
+  const { product, quantity, productId } = route.params;
 
-  // --- State initialization fixes ---
+  // --- State initialization ---
   const [value, setValue] = useState<number>(Number(quantity) || 0);
   const [overrideQuantity, setOverrideQuantity] = useState<string>(String(Number(quantity) || 0));
   const [modalVisible, setModalVisible] = useState(false);
@@ -34,26 +34,64 @@ export default function OrderProduct() {
   const [priority, setPriority] = useState<"High" | "Medium" | "Low">("High");
   const [notes, setNotes] = useState("");
 
-  // Current user fetched from backend
   const [currentUser, setCurrentUser] = useState<{ user_id: number; role_id: number } | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
 
+  const [fifoBatch, setFifoBatch] = useState<{ batch_id: number; quantity: number } | null>(null);
+  const STORE_ID = 1;
+
+  // --- Fetch current session user ---
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
         const res = await fetch("http://127.0.0.1:8000/session/user");
-        if (!res.ok) return;
-        const data = await res.json();
-        setCurrentUser(data);
+        if (!res.ok) {
+          // fallback: set default manager if no session user
+          await fetch("http://127.0.0.1:8000/session/user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: 2 }), // default manager ID
+          });
+          const fallbackRes = await fetch("http://127.0.0.1:8000/session/user");
+          const fallbackData = await fallbackRes.json();
+          setCurrentUser({ user_id: fallbackData.user_id, role_id: fallbackData.role_id });
+        } else {
+          const data = await res.json();
+          setCurrentUser({ user_id: data.user_id, role_id: data.role_id });
+        }
       } catch (err) {
         console.error("Error fetching current user:", err);
+      } finally {
+        setLoadingUser(false);
       }
     };
     fetchCurrentUser();
   }, []);
 
+  // --- Fetch FIFO batch for this product ---
+  useEffect(() => {
+    const fetchFifoBatch = async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/replenishment/${STORE_ID}/${productId}`);
+        if (!res.ok) throw new Error("Failed to fetch FIFO batch");
+
+        const data = await res.json();
+        setFifoBatch({ batch_id: data.batch_id, quantity: data.available_quantity });
+
+        // set default quantity to FIFO batch
+        setValue(data.available_quantity);
+        setOverrideQuantity(String(data.available_quantity));
+      } catch (err) {
+        console.error(err);
+        Alert.alert("Error", "Could not fetch oldest batch for this product");
+      }
+    };
+    fetchFifoBatch();
+  }, [productId]);
+
   // --- Override modal setup ---
   const openOverrideModal = () => {
-    if (currentUser?.role_id !== 2) return;
+    if (currentUser?.role_id !== 2) return; // only managers
     setOverrideQuantity(String(value || 0));
     setReason("");
     setPriority("High");
@@ -65,29 +103,52 @@ export default function OrderProduct() {
     try {
       const qty = Number(overrideQuantity) || 0;
       const response = await fetch(
-        `http://127.0.0.1:8000/replenishment-lists/1/2026-01-24/items/1/override`,
+        `http://127.0.0.1:8000/replenishment-lists/1/2026-01-24/items/${productId}/override`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             user_id: String(currentUser?.user_id ?? 1),
           },
-          body: JSON.stringify({
-            quantity: qty,
-            reason,
-            priority,
-            notes,
-          }),
+          body: JSON.stringify({ quantity: qty, reason, priority, notes }),
         }
       );
       if (!response.ok) throw new Error("Failed to override");
 
-      setValue(qty); // update main quantity
+      setValue(qty);
       setModalVisible(false);
       Alert.alert("Success", "Override applied!");
     } catch (err) {
       console.error(err);
       Alert.alert("Error", "Failed to override item");
+    }
+  };
+
+  // --- Place order using FIFO batch ---
+  const placeOrder = async () => {
+    if (!fifoBatch) {
+      Alert.alert("Error", "No batch available for this product");
+      return;
+    }
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8000/replenishment-frequency/${productId}/${STORE_ID}/replenish`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            user_id: String(currentUser?.user_id ?? 1),
+          },
+          body: JSON.stringify({ batch_id: fifoBatch.batch_id, quantity: value, user_id: currentUser?.user_id ?? 1 }),
+        }
+      );
+      if (!res.ok) throw new Error("Failed to place order");
+
+      Alert.alert("Success", `Order placed for batch ${fifoBatch.batch_id}`);
+      navigation.goBack();
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Failed to place order");
     }
   };
 
@@ -99,6 +160,14 @@ export default function OrderProduct() {
 
       <Text style={styles.subtitle}>Updated 10min ago</Text>
       <Text style={styles.title}>Order {product}</Text>
+
+      {fifoBatch && (
+        <View style={[styles.card, { backgroundColor: "#E0F2FE" }]}>
+          <Text style={styles.label}>FIFO Batch Info</Text>
+          <Text>Batch ID: {fifoBatch.batch_id}</Text>
+          <Text>Available Quantity: {fifoBatch.quantity}</Text>
+        </View>
+      )}
 
       <View style={styles.card}>
         <Text style={styles.label}>Quantity</Text>
@@ -120,8 +189,8 @@ export default function OrderProduct() {
           </TouchableOpacity>
         </View>
 
-        {/* Override button only for manager */}
-        {currentUser?.role_id === 2 && (
+        {/* SHOW BUTTON ONLY FOR MANAGERS */}
+        {!loadingUser && currentUser?.role_id === 2 && (
           <TouchableOpacity style={styles.overrideButton} onPress={openOverrideModal}>
             <Text style={{ color: "#fff", fontWeight: "600" }}>Override Suggestion</Text>
           </TouchableOpacity>
@@ -134,7 +203,7 @@ export default function OrderProduct() {
         <Text style={styles.meta}>Estimated delivery date: 28-11-2025</Text>
       </View>
 
-      <TouchableOpacity style={styles.primaryButton}>
+      <TouchableOpacity style={styles.primaryButton} onPress={placeOrder}>
         <Text style={styles.primaryText}>Place order</Text>
       </TouchableOpacity>
 
@@ -180,7 +249,10 @@ export default function OrderProduct() {
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
                 <Text>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={submitOverride} style={[styles.modalButton, { backgroundColor: "#059669" }]}>
+              <TouchableOpacity
+                onPress={submitOverride}
+                style={[styles.modalButton, { backgroundColor: "#059669" }]}
+              >
                 <Text style={{ color: "#fff" }}>Submit</Text>
               </TouchableOpacity>
             </View>
