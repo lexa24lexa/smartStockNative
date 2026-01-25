@@ -2,29 +2,28 @@ import React, { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View, ScrollView, Dimensions } from "react-native";
 import Svg, { Path, Line, Circle, Text as SvgText } from "react-native-svg";
 import Layout from "../../components/ui/Layout";
+import { Colors, Radius, Spacing, Font } from "../../constants/theme";
 
+// Types
 type CategoryStock = { category: string; total_stock: number };
-type ReplenishmentItem = {
-  product_id: number;
-  product_name: string;
-  current_stock: number;
-  quantity: number | null;
-};
+type ReplenishmentItem = { product_id: number; product_name: string; current_stock: number; quantity: number | null };
 
+// Stat card
 function StatCard({ value, label, color }: { value: string; label: string; color: string }) {
   return (
     <View style={[styles.card, { backgroundColor: color }]}>
-      <Text style={styles.cardValue}>{value}</Text>
-      <Text style={styles.cardLabel}>{label}</Text>
+      <Text style={[Font.title, { color: "#fff" }]}>{value}</Text>
+      <Text style={[Font.subtitle, { color: "#fff" }]}>{label}</Text>
     </View>
   );
 }
 
+// Progress bar
 function ProgressBar({ value, maxValue }: { value: number; maxValue: number }) {
   const percentage = Math.min((value / maxValue) * 100, 100);
-  let bgColor = "#059669";
-  if (percentage < 50) bgColor = "#DC2626";
-  else if (percentage < 80) bgColor = "#F59E0B";
+  let bgColor = Colors.primary;
+  if (percentage < 50) bgColor = Colors.danger;
+  else if (percentage < 80) bgColor = Colors.warning;
 
   return (
     <View style={styles.progressBarBackground}>
@@ -33,6 +32,7 @@ function ProgressBar({ value, maxValue }: { value: number; maxValue: number }) {
   );
 }
 
+// Main dashboard
 export default function Dashboard() {
   const [categories, setCategories] = useState<CategoryStock[]>([]);
   const [replenishments, setReplenishments] = useState<ReplenishmentItem[]>([]);
@@ -40,7 +40,6 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const storeId = 1;
 
-  // --- Fetch data ---
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -58,34 +57,19 @@ export default function Dashboard() {
     }
   };
 
-  // --- Initial fetch ---
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // --- Auto refresh every 30 minutes ---
-  useEffect(() => {
-    const interval = setInterval(fetchData, 30 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // --- Timer for "last updated" label ---
+  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { const interval = setInterval(fetchData, 30 * 60 * 1000); return () => clearInterval(interval); }, []);
   const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => setTick(prev => prev + 1), 60000);
-    return () => clearInterval(interval);
-  }, []);
+  useEffect(() => { const interval = setInterval(() => setTick(prev => prev + 1), 60000); return () => clearInterval(interval); }, []);
 
   const getUpdatedText = () => {
     if (!lastUpdated) return "Loading…";
-    // use tick to trigger re-render every minute
     const diff = Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
     if (diff < 60) return "Updated just now";
     if (diff < 3600) return `Updated ${Math.floor(diff / 60)} min ago`;
     return `Updated ${Math.floor(diff / 3600)} h ago`;
   };
 
-  // --- Stats ---
   const stats = useMemo(() => {
     const total = categories.length;
     const outOfStock = categories.filter(c => c.total_stock === 0).length;
@@ -99,8 +83,8 @@ export default function Dashboard() {
 
   const lowStockItems = useMemo(() => replenishments.filter(i => i.current_stock < 50), [replenishments]);
 
-  // --- Chart ---
-  const chartWidth = Dimensions.get("window").width - 32;
+  // Chart setup
+  const chartWidth = Dimensions.get("window").width - Spacing.m * 2;
   const chartHeight = 220;
   const padding = 40;
   const stockValues = categories.map(c => c.total_stock);
@@ -117,72 +101,57 @@ export default function Dashboard() {
 
   return (
     <Layout onRefresh={fetchData}>
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Text style={styles.title}>Dashboard</Text>
-        <Text style={styles.subtitle}>{loading ? "Loading…" : getUpdatedText()}</Text>
+      <ScrollView contentContainerStyle={{ padding: Spacing.m, backgroundColor: Colors.bgPage }}>
+        <Text style={Font.title}>Dashboard</Text>
+        <Text style={Font.subtitle}>{loading ? "Loading…" : getUpdatedText()}</Text>
 
+        {/* Stats */}
         <View style={styles.grid}>
-          <StatCard value={`${stats.availability}%`} label="Stock availability" color="#059669" />
-          <StatCard value={`${stats.outOfStock}`} label="Out of stock categories" color="#DC2626" />
-          <StatCard value={`${stats.predictedRestocks}`} label="Predicted restocks" color="#2563EB" />
-          <StatCard value={`${stats.activeCategories}`} label="Active categories" color="#1E40AF" />
+          <StatCard value={`${stats.availability}%`} label="Stock availability" color={Colors.primary} />
+          <StatCard value={`${stats.outOfStock}`} label="Out of stock categories" color={Colors.danger} />
+          <StatCard value={`${stats.predictedRestocks}`} label="Predicted restocks" color={Colors.secondary} />
+          <StatCard value={`${stats.activeCategories}`} label="Active categories" color={Colors.secondary} />
         </View>
 
-        {/* Stock vs Sales Chart */}
+        {/* Stock vs Sales chart */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Stock vs Sales Trend</Text>
+          <Text style={[Font.label, { marginBottom: 12 }]}>Stock vs Sales Trend</Text>
           <Svg width="100%" height={chartHeight}>
             {yAxisValues.map((v, i) => {
               const y = yScale(v);
               return (
                 <React.Fragment key={i}>
-                  <Line x1={padding} y1={y} x2={chartWidth - padding} y2={y} stroke="#E5E7EB" strokeWidth={1} />
-                  <SvgText x={padding - 6} y={y + 4} fontSize={10} fill="#6B7280" textAnchor="end">
-                    {v}
-                  </SvgText>
+                  <Line x1={padding} y1={y} x2={chartWidth - padding} y2={y} stroke={Colors.border} strokeWidth={1} />
+                  <SvgText x={padding - 6} y={y + 4} fontSize={10} fill={Colors.textSecondary} textAnchor="end">{v}</SvgText>
                 </React.Fragment>
               );
             })}
-            <Path d={lineStock} stroke="#059669" strokeWidth={2} fill="none" />
-            <Path d={lineSales} stroke="#2563EB" strokeWidth={2} fill="none" />
-            {stockValues.map((v, i) => <Circle key={`s${i}`} cx={xScale(i)} cy={yScale(v)} r={4} fill="#059669" />)}
-            {salesValues.map((v, i) => <Circle key={`sa${i}`} cx={xScale(i)} cy={yScale(v)} r={4} fill="#2563EB" />)}
-            {labels.map((l, i) => (
-              <SvgText key={i} x={xScale(i)} y={chartHeight - padding + 14} fontSize={10} fill="#6B7280" textAnchor="middle">
-                {l}
-              </SvgText>
-            ))}
+            <Path d={lineStock} stroke={Colors.primary} strokeWidth={2} fill="none" />
+            <Path d={lineSales} stroke={Colors.secondary} strokeWidth={2} fill="none" />
+            {stockValues.map((v, i) => <Circle key={`s${i}`} cx={xScale(i)} cy={yScale(v)} r={4} fill={Colors.primary} />)}
+            {salesValues.map((v, i) => <Circle key={`sa${i}`} cx={xScale(i)} cy={yScale(v)} r={4} fill={Colors.secondary} />)}
+            {labels.map((l, i) => <SvgText key={i} x={xScale(i)} y={chartHeight - padding + 14} fontSize={10} fill={Colors.textSecondary} textAnchor="middle">{l}</SvgText>)}
           </Svg>
-
           <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColorBox, { backgroundColor: "#059669" }]} />
-              <Text style={styles.legendLabel}>Stock</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColorBox, { backgroundColor: "#2563EB" }]} />
-              <Text style={styles.legendLabel}>Sales</Text>
-            </View>
+            <View style={styles.legendItem}><View style={[styles.legendColorBox, { backgroundColor: Colors.primary }]} /><Text style={Font.subtitle}>Stock</Text></View>
+            <View style={styles.legendItem}><View style={[styles.legendColorBox, { backgroundColor: Colors.secondary }]} /><Text style={Font.subtitle}>Sales</Text></View>
           </View>
         </View>
 
-        {/* Low Stock */}
+        {/* Low stock */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Low Stock Products (&lt;50)</Text>
-          {lowStockItems.length === 0 ? (
-            <Text style={styles.chartText}>All products have sufficient stock.</Text>
-          ) : (
+          <Text style={[Font.label, { marginBottom: 12 }]}>Low Stock Products (&lt;50)</Text>
+          {lowStockItems.length === 0 ? <Text style={Font.subtitle}>All products have sufficient stock.</Text> :
             lowStockItems.map(item => {
               const maxStock = item.quantity || 100;
               return (
                 <View key={item.product_id} style={styles.lowStockRow}>
-                  <Text style={styles.lowStockName}>{item.product_name}</Text>
-                  <Text style={styles.lowStockQty}>{item.current_stock}</Text>
+                  <Text style={[Font.label, { marginBottom: 4 }]}>{item.product_name}</Text>
+                  <Text style={{ ...Font.label, fontWeight: "bold" as const, color: Colors.danger, marginBottom: 4 }}>{item.current_stock}</Text>
                   <ProgressBar value={item.current_stock} maxValue={maxStock} />
                 </View>
               );
-            })
-          )}
+            })}
         </View>
       </ScrollView>
     </Layout>
@@ -190,22 +159,13 @@ export default function Dashboard() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "bold" },
-  subtitle: { color: "#6B7280", marginBottom: 16 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  card: { width: "48%", padding: 16, borderRadius: 12 },
-  cardValue: { fontSize: 22, fontWeight: "bold", color: "#fff" },
-  cardLabel: { color: "#fff", marginTop: 4 },
-  section: { marginTop: 24, backgroundColor: "#fff", padding: 16, borderRadius: 12 },
-  sectionTitle: { fontWeight: "600", marginBottom: 12 },
-  chartText: { color: "#6B7280" },
-  lowStockRow: { marginBottom: 12 },
-  lowStockName: { fontWeight: "500", marginBottom: 4 },
-  lowStockQty: { fontWeight: "bold", color: "#DC2626", marginBottom: 4 },
-  progressBarBackground: { height: 8, backgroundColor: "#E5E7EB", borderRadius: 4 },
-  progressBarFill: { height: "100%", borderRadius: 4 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.s },
+  card: { width: "48%", padding: Spacing.m, borderRadius: Radius.card },
+  section: { marginTop: Spacing.l, backgroundColor: Colors.bgCard, padding: Spacing.m, borderRadius: Radius.card },
+  progressBarBackground: { height: 8, backgroundColor: Colors.border, borderRadius: Radius.small },
+  progressBarFill: { height: "100%", borderRadius: Radius.small },
   legend: { flexDirection: "row", marginTop: 8, gap: 16 },
   legendItem: { flexDirection: "row", alignItems: "center" },
   legendColorBox: { width: 12, height: 12, borderRadius: 2 },
-  legendLabel: { marginLeft: 4, fontSize: 12 },
+  lowStockRow: { marginBottom: 12 },
 });
