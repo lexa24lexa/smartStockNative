@@ -197,6 +197,22 @@ def get_monthly_report(
     return StreamingResponse(io.StringIO(csv_text), media_type="text/csv",
                              headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
+router.get("/daily")
+def get_daily_report(
+    store_id: int = Query(...),
+    report_date: Optional[datetime] = Query(None),
+    format: str = Query("json", pattern=r"^(json|csv)$"),
+    db: Session = Depends(database.get_db),
+):
+    report_date = report_date or datetime.now()
+    report = _build_daily_report(db, store_id, report_date)
+    if format == "json":
+        return report
+    csv_text = _report_to_csv(report)
+    filename = f"daily_report_store{store_id}_{report_date.date()}.csv"
+    return StreamingResponse(io.StringIO(csv_text), media_type="text/csv",
+                             headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
 @router.get("/email/status")
 def email_status(db: Session = Depends(database.get_db)):
     # Return last 20 email logs
