@@ -25,20 +25,31 @@ Inside of the frontend folder:
 ##### 1. 
 npm install
 ##### 2. 
+npm run web
+
 npm run android
 
 npm run ios # you need to use macOS to build the iOS project - use the Expo app if you need to do iOS development without a Mac
 
-npm run web
 #### 3. 
-npx expo install @react-navigation/native
-
-npx expo install @react-navigation/bottom-tabs
-
-npx expo install react-native-screens 
-react-native-safe-area-context
-
-npx expo install @expo/vector-icons
+you may need to install extra dependencies.
 
 ***Back-End***
-To be added
+##### 1. 
+pip install fastapi uvicorn pymysql sqlalchemy
+
+##### 2. 
+pip install -r requirements.txt
+
+##### 3. 
+python -m uvicorn app.main:app --reload
+
+##### 4. 
+docker run --name retail-mysql \
+  -e MYSQL_ALLOW_EMPTY_PASSWORD=yes \
+  -e MYSQL_DATABASE=retail_bd \
+  -p 3307:3306 \
+  -v /path/to/backend:/docker-entrypoint-initdb.d \
+  -d mysql:8
+
+*Replace /path/to/backend with the absolute path to your backend folder.*
