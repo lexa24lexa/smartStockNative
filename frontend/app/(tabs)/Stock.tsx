@@ -35,6 +35,7 @@ interface ProductRowProps {
   item: StockOverview;
   onPress: () => void;
   onViewHistory: () => void;
+  onViewMovements: () => void;
 }
 
 function statusColor(status: StockStatus) {
@@ -60,7 +61,7 @@ function formatLastSale(date?: string | null) {
   return `Last sale: ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-function ProductRow({ item, onPress, onViewHistory }: ProductRowProps) {
+function ProductRow({ item, onPress, onViewHistory, onViewMovements }: ProductRowProps) {
   const color = statusColor(item.status);
   const formatDate = (date?: string | null) => (date ? new Date(date).toLocaleDateString() : "—");
   const priority = calculatePriority(item);
@@ -99,7 +100,7 @@ function ProductRow({ item, onPress, onViewHistory }: ProductRowProps) {
         <Text style={Font.meta}>Shelf facing: {item.facing ?? 0}</Text>
         <Text style={[Font.meta, { fontWeight: "700" }]}>Replenishment priority: {priority}</Text>
 
-        {/* NEW: View History Button */}
+        {/* View Replenishment History */}
         <Pressable
           onPress={onViewHistory}
           style={({ pressed }) => [
@@ -108,6 +109,17 @@ function ProductRow({ item, onPress, onViewHistory }: ProductRowProps) {
           ]}
         >
           <Text style={styles.historyButtonText}>View Replenishment History</Text>
+        </Pressable>
+
+        {/* View Stock Movements */}
+        <Pressable
+          onPress={onViewMovements}
+          style={({ pressed }) => [
+            styles.historyButton,
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <Text style={styles.historyButtonText}>View Stock Movements</Text>
         </Pressable>
       </View>
     </Pressable>
@@ -122,6 +134,18 @@ interface ReplenishmentHistoryItem {
   user: string;
 }
 
+interface StockMovement {
+  movement_id: number;
+  timestamp: string;
+  batch_id: string;
+  quantity: number;
+  origin_type: string;
+  origin_id: number;
+  destination_type: string;
+  destination_id: number;
+  user_id: number;
+}
+
 export default function Stock() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [data, setData] = React.useState<StockOverview[]>([]);
@@ -130,6 +154,9 @@ export default function Stock() {
   const [modalVisible, setModalVisible] = React.useState(false);
   const [history, setHistory] = React.useState<ReplenishmentHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = React.useState(false);
+  const [movementModalVisible, setMovementModalVisible] = React.useState(false);
+  const [movements, setMovements] = React.useState<StockMovement[]>([]);
+  const [movementsLoading, setMovementsLoading] = React.useState(false);
   const STORE_ID = 1;
 
   React.useEffect(() => {
@@ -188,6 +215,36 @@ export default function Stock() {
     }
   };
 
+  const viewMovements = async (productId: number) => {
+    setMovementModalVisible(true);
+    setMovementsLoading(true);
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/stock/movements/${productId}`);
+      if (!res.ok) throw new Error("Failed to load stock movements");
+      const json = await res.json();
+
+      const mapped: StockMovement[] = json.map((m: any) => ({
+        movement_id: m.id,
+        timestamp: m.timestamp,
+        batch_id: m.batch_id,
+        quantity: m.quantity,
+        origin_type: m.origin_type,
+        origin_id: m.origin_id,
+        destination_type: m.destination_type,
+        destination_id: m.destination_id,
+        user_id: m.user_id,
+      }));
+
+      setMovements(mapped);
+    } catch (e) {
+      console.error(e);
+      setMovements([]);
+    } finally {
+      setMovementsLoading(false);
+    }
+  };
+
   return (
     <Layout>
       <Text style={Font.subtitle}>Live inventory</Text>
@@ -213,13 +270,14 @@ export default function Stock() {
             item={item}
             onPress={() => navigation.navigate("Order-product", { productId: item.product_id })}
             onViewHistory={() => viewHistory(item.product_id)}
+            onViewMovements={() => viewMovements(item.product_id)}
           />
         )}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: Spacing.l }}
       />
 
-      {/* NEW: Replenishment History Modal */}
+      {/* Replenishment History Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -248,6 +306,43 @@ export default function Stock() {
           )}
           <Pressable
             onPress={() => setModalVisible(false)}
+            style={styles.closeButton}
+          >
+            <Text style={styles.closeButtonText}>Close</Text>
+          </Pressable>
+        </Layout>
+      </Modal>
+
+      {/* Stock Movements Modal */}
+      <Modal
+        visible={movementModalVisible}
+        animationType="slide"
+        onRequestClose={() => setMovementModalVisible(false)}
+      >
+        <Layout>
+          <Text style={[Font.title, { marginBottom: Spacing.m }]}>
+            Stock Movements
+          </Text>
+          {movementsLoading ? (
+            <ActivityIndicator size="large" color={Colors.primary} />
+          ) : movements.length === 0 ? (
+            <Text style={Font.meta}>No stock movements found.</Text>
+          ) : (
+            <ScrollView>
+              {movements.map((m, idx) => (
+                <View key={idx} style={styles.historyRow}>
+                  <Text style={Font.label}>Date: {new Date(m.timestamp).toLocaleString()}</Text>
+                  <Text style={Font.meta}>Batch: {m.batch_id}</Text>
+                  <Text style={Font.meta}>Quantity: {m.quantity}</Text>
+                  <Text style={Font.meta}>Origin: {m.origin_type} #{m.origin_id}</Text>
+                  <Text style={Font.meta}>Destination: {m.destination_type} #{m.destination_id}</Text>
+                  <Text style={Font.meta}>User: User {m.user_id}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+          <Pressable
+            onPress={() => setMovementModalVisible(false)}
             style={styles.closeButton}
           >
             <Text style={styles.closeButtonText}>Close</Text>
