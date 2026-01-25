@@ -119,6 +119,17 @@ class SaleLine(Base):
     sale = relationship("Sale", back_populates="sale_lines")
     batch = relationship("Batch", back_populates="sale_lines")
 
+# Replenishment
+class Replenishment(Base):
+    __tablename__ = "REPLENISHMENT"
+    replenishment_id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("STORE.store_id"), nullable=False)
+    scheduled_date = Column(Date, nullable=False)
+    completed_date = Column(Date, nullable=True)
+    status = Column(String(20), default="pending")
+
+    store = relationship("Store")
+
 # Replenishment frequency table
 class ReplenishmentFrequency(Base):
     __tablename__ = "REPLENISHMENT_FREQUENCY"

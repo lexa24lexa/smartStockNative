@@ -1,15 +1,18 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException
-from datetime import datetime, timezone
+from math import ceil
 
 from .. import models, schemas
+
+DISPLAY_DAYS = 3
 
 class StockService:
 
     @staticmethod
+    # Helper to get store or raise 404
     def get_store(db: Session, store_id: int):
         store = db.query(models.Store).filter(models.Store.store_id == store_id).first()
         if not store:
@@ -17,8 +20,9 @@ class StockService:
         return store
 
     @staticmethod
+    # Create new stock entry
     def create_stock(db: Session, stock_in: schemas.StockCreate):
-        store = StockService.get_store(db, stock_in.store_id)
+        StockService.get_store(db, stock_in.store_id)
 
         batch = db.query(models.Batch).filter(
             models.Batch.batch_id == stock_in.batch_id,
@@ -48,6 +52,7 @@ class StockService:
         return stock
 
     @staticmethod
+    # Update existing stock entry
     def update_stock(db: Session, stock_id: int, stock_in: schemas.StockUpdate):
         stock = db.query(models.Stock).filter(models.Stock.stock_id == stock_id).first()
         if not stock:
@@ -63,6 +68,7 @@ class StockService:
         return stock
 
     @staticmethod
+    # Delete stock entry
     def delete_stock(db: Session, stock_id: int):
         stock = db.query(models.Stock).filter(models.Stock.stock_id == stock_id).first()
         if not stock:
@@ -71,6 +77,7 @@ class StockService:
         db.commit()
 
     @staticmethod
+    # Get stock for a store
     def get_store_stock(db: Session, store_id: int) -> List[schemas.StockResponse]:
         if store_id <= 0:
             raise HTTPException(status_code=400, detail="store_id must be positive")
@@ -95,13 +102,20 @@ class StockService:
         ]
 
     @staticmethod
+    # Get serialized stock for a store
     def get_store_stock_serialized(db: Session, store_id: int):
         return [
-            {'product_name': r.product_name, 'batch_code': r.batch_code, 'expiration_date': r.expiration_date, 'quantity': r.quantity}
+            {
+                'product_name': r.product_name,
+                'batch_code': r.batch_code,
+                'expiration_date': r.expiration_date,
+                'quantity': r.quantity
+            }
             for r in StockService.get_store_stock(db, store_id)
         ]
 
     @staticmethod
+    # Get batches for a product in a store
     def get_product_batches(db: Session, store_id: int, product_id: int) -> List[schemas.BatchStockResponse]:
         if store_id <= 0 or product_id <= 0:
             raise HTTPException(status_code=400, detail="store_id and product_id must be positive integers")
@@ -130,94 +144,97 @@ class StockService:
         ]
 
     @staticmethod
-    def get_stock_overview(db: Session, store_id: int):
-        stock_rows = (
-            db.query(
+    def get_stock_overview(db: Session, store_id: int) -> List[schemas.StockOverviewResponse]:
+        stock_rows = db.query(
                 models.Product.product_id,
                 models.Product.name,
                 func.sum(models.Stock.quantity).label("total_quantity"),
-                func.min(models.Stock.reorder_level).label("reorder_level"),
-            )
-            .join(models.Batch, models.Batch.product_id == models.Product.product_id)
-            .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)
-            .filter(models.Stock.store_id == store_id)
-            .group_by(models.Product.product_id, models.Product.name)
+                func.min(models.Stock.reorder_level).label("reorder_level")
+            )\
+            .join(models.Batch, models.Batch.product_id == models.Product.product_id)\
+            .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)\
+            .filter(models.Stock.store_id == store_id)\
+            .group_by(models.Product.product_id, models.Product.name)\
             .all()
-        )
 
         results = []
 
         for row in stock_rows:
-            last_sale = (
-                db.query(func.max(models.Sale.date))
-                .join(models.SaleLine, models.Sale.sale_id == models.SaleLine.sale_id)
-                .join(models.Batch, models.Batch.batch_id == models.SaleLine.batch_id)
-                .filter(
-                    models.Batch.product_id == row.product_id,
-                    models.Sale.store_id == store_id,
-                )
-                .scalar()
-            )
+            total_qty = float(row.total_quantity or 0)
+            reorder_level = float(row.reorder_level or 0)
 
-            total_sold = (
-                db.query(func.sum(models.SaleLine.quantity))
-                .join(models.Batch)
-                .join(models.Sale)
-                .filter(
-                    models.Batch.product_id == row.product_id,
-                    models.Sale.store_id == store_id,
-                )
-                .scalar()
-                or 0
-            )
+            last_sale = db.query(func.max(models.Sale.date))\
+                        .join(models.SaleLine, models.Sale.sale_id == models.SaleLine.sale_id)\
+                        .join(models.Batch, models.Batch.batch_id == models.SaleLine.batch_id)\
+                        .filter(models.Batch.product_id == row.product_id,
+                                models.Sale.store_id == store_id).scalar()
 
-            days = (
-                db.query(func.count(func.distinct(func.date(models.Sale.date))))
-                .join(models.SaleLine)
-                .join(models.Batch)
-                .filter(
-                    models.Batch.product_id == row.product_id,
-                    models.Sale.store_id == store_id,
-                )
-                .scalar()
-                or 1
-            )
+            total_sold = db.query(func.sum(models.SaleLine.quantity))\
+                        .join(models.Batch)\
+                        .join(models.Sale)\
+                        .filter(models.Batch.product_id == row.product_id,
+                                models.Sale.store_id == store_id).scalar() or 0
 
-            avg_daily_sales = total_sold / days if days else 0
-            days_to_oos = (
-                int(row.total_quantity / avg_daily_sales)
-                if avg_daily_sales > 0
-                else None
-            )
+            days_with_sales = db.query(func.count(func.distinct(func.date(models.Sale.date))))\
+                                .join(models.SaleLine)\
+                                .join(models.Batch)\
+                                .filter(models.Batch.product_id == row.product_id,
+                                        models.Sale.store_id == store_id).scalar() or 1
 
-            if row.total_quantity <= row.reorder_level:
+            avg_daily_sales = round(float(total_sold) / days_with_sales, 2) if days_with_sales else 0
+
+            days_to_oos = int(total_qty / avg_daily_sales) if avg_daily_sales > 0 else None
+
+            if total_qty <= reorder_level:
                 status = "Critical"
-            elif row.total_quantity <= row.reorder_level * 2:
+            elif total_qty <= reorder_level * 2:
                 status = "Low"
             else:
                 status = "Stable"
 
-            progress = min(row.total_quantity / (row.reorder_level * 3), 1)
+            progress = min(total_qty / (reorder_level * 3), 1) if reorder_level > 0 else 1
+
+            freq_record = db.query(models.ReplenishmentFrequency)\
+                            .filter(models.ReplenishmentFrequency.store_id == store_id,
+                                    models.ReplenishmentFrequency.product_id == row.product_id).first()
+            replenishment_frequency = freq_record.replenishment_frequency if freq_record else None
+            last_replenishment_date = freq_record.last_replenishment_date if freq_record else None
+            next_replenishment_date = (last_replenishment_date + timedelta(days=replenishment_frequency)
+                                       if last_replenishment_date and replenishment_frequency else None)
+
+            if replenishment_frequency and avg_daily_sales:
+                suggested_qty = max(int(avg_daily_sales * replenishment_frequency - total_qty), 0)
+            else:
+                suggested_qty = max(int(total_qty * 0.2), 1) if total_qty > 0 else 0
+
+            facing = ceil(avg_daily_sales * DISPLAY_DAYS) if avg_daily_sales > 0 else (1 if total_qty > 0 else 0)
+            if facing > total_qty:
+                facing = int(total_qty)
 
             results.append(
                 schemas.StockOverviewResponse(
                     product_id=row.product_id,
                     product_name=row.name,
-                    total_quantity=row.total_quantity,
-                    reorder_level=row.reorder_level,
+                    total_quantity=total_qty,
+                    reorder_level=reorder_level,
                     status=status,
                     progress=progress,
+                    average_daily_sales=avg_daily_sales,
                     days_to_out_of_stock=days_to_oos,
                     last_sale_at=last_sale,
+                    replenishment_frequency=replenishment_frequency,
+                    next_replenishment_date=next_replenishment_date,
+                    quantity=suggested_qty,
+                    facing=facing
                 )
             )
 
         return results
-    
+
     @staticmethod
+    # Get stock predictions for a store
     def get_stock_predictions(db: Session, store_id: int):
         overview = StockService.get_stock_overview(db, store_id)
-
         predictions = []
         next_restock_days = []
 
@@ -227,8 +244,7 @@ class StockService:
 
             predicted_change = (
                 -100 * (7 / item.days_to_out_of_stock)
-                if item.days_to_out_of_stock > 0
-                else -100
+                if item.days_to_out_of_stock > 0 else -100
             )
 
             days_until_restock = item.days_to_out_of_stock
@@ -250,9 +266,10 @@ class StockService:
             predictions=predictions,
         )
 
-class FIFOService:
 
+class FIFOService:
     @staticmethod
+    # Helper to get FIFO ordered batches for a product in a store
     def _fifo_batches_for_product(db: Session, store_id: int, product_id: int):
         return db.query(models.Batch, models.Stock)\
             .join(models.Stock, models.Stock.batch_id == models.Batch.batch_id)\
@@ -264,13 +281,29 @@ class FIFOService:
                       models.Batch.batch_id.asc()).all()
 
     @staticmethod
+    # Check for FIFO violation
     def check_fifo_violation(db: Session, store_id: int, product_id: int, selected_batch_id: int):
         fifo_rows = FIFOService._fifo_batches_for_product(db, store_id, product_id)
         if not fifo_rows:
-            return {"is_violation": False, "message": "No stock available", "expected_batch_id": None, "expected_batch_code": None}
+            return {
+                "is_violation": False,
+                "message": "No stock available",
+                "expected_batch_id": None,
+                "expected_batch_code": None
+            }
 
         expected = fifo_rows[0][0]
         if expected.batch_id == selected_batch_id:
-            return {"is_violation": False, "message": "OK (FIFO respected)", "expected_batch_id": expected.batch_id, "expected_batch_code": expected.batch_code}
+            return {
+                "is_violation": False,
+                "message": "OK (FIFO respected)",
+                "expected_batch_id": expected.batch_id,
+                "expected_batch_code": expected.batch_code
+            }
 
-        return {"is_violation": True, "message": "FIFO violation: selected batch is not the next FIFO batch", "expected_batch_id": expected.batch_id, "expected_batch_code": expected.batch_code}
+        return {
+            "is_violation": True,
+            "message": "FIFO violation: selected batch is not the next FIFO batch",
+            "expected_batch_id": expected.batch_id,
+            "expected_batch_code": expected.batch_code
+        }

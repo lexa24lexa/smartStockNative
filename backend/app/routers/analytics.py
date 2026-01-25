@@ -57,7 +57,7 @@ def get_stock_vs_sales(
 
     sales_results = sales_query.group_by(models.Category.category_name).all()
 
-    # Combine stock and sales results
+    # Merge stock and sales into one report
     report = {}
     for cat_name, qty in stock_results:
         report[cat_name] = {"category": cat_name, "stock": int(qty) if qty else 0, "sales": 0}
@@ -71,6 +71,7 @@ def get_stock_vs_sales(
 # Total stock per category
 @router.get("/stock-by-category", response_model=List[schemas.CategoryStock])
 def stock_by_category(db: Session = Depends(database.get_db)):
+    # Query total stock grouped by category
     results = (
         db.query(
             models.Category.category_name.label("category"),
@@ -91,6 +92,7 @@ def stock_by_category(db: Session = Depends(database.get_db)):
 # Low stock items
 @router.get("/low-stock", response_model=List[schemas.ReplenishmentItem])
 def low_stock_items(store_id: int, db: Session = Depends(database.get_db)):
+    # Get products with stock below 50 in a specific store
     items = (
         db.query(
             models.Product.product_id,
@@ -120,10 +122,10 @@ def low_stock_items(store_id: int, db: Session = Depends(database.get_db)):
         for r in items
     ]
 
-
-# Generate fake sales
+# Generate fake sales data for testing
 @router.post("/generate-fake-sales")
 def generate_fake_sales(db: Session = Depends(database.get_db)):
+    # Pick 5 batches to generate fake sales
     batches = db.query(models.Batch).limit(5).all()
     if not batches:
         return {"error": "No batches found. Please create stock first."}
@@ -136,6 +138,7 @@ def generate_fake_sales(db: Session = Depends(database.get_db)):
         db.commit()
         db.refresh(new_sale)
 
+        # Add sale lines for each batch
         for batch in batches:
             qty = random.randint(1, 50)
             line = models.SaleLine(
@@ -150,10 +153,88 @@ def generate_fake_sales(db: Session = Depends(database.get_db)):
     db.commit()
     return {"message": f"Successfully generated {created_count} fake sales."}
 
+# Average daily sales per product
+@router.get(
+    "/average-daily-sales",
+    response_model=List[schemas.AverageDailySalesPerProduct],
+)
+def average_daily_sales_per_product(
+    store_id: int = Query(..., gt=0),
+    db: Session = Depends(database.get_db),
+):
+    """
+    Returns average daily sales per product (whole units only)
+    """
+
+    # Total quantity sold per product
+    totals_subquery = (
+        db.query(
+            models.Product.product_id.label("product_id"),
+            models.Product.name.label("product_name"),
+            func.sum(models.SaleLine.quantity).label("total_quantity_sold"),
+        )
+        .join(models.Batch, models.Batch.product_id == models.Product.product_id)
+        .join(models.SaleLine, models.SaleLine.batch_id == models.Batch.batch_id)
+        .join(models.Sale, models.Sale.sale_id == models.SaleLine.sale_id)
+        .filter(models.Sale.store_id == store_id)
+        .group_by(models.Product.product_id, models.Product.name)
+        .subquery()
+    )
+
+    # Count days with sales per product
+    days_subquery = (
+        db.query(
+            models.Product.product_id.label("product_id"),
+            func.count(func.distinct(func.date(models.Sale.date))).label(
+                "total_days_with_sales"
+            ),
+        )
+        .join(models.Batch, models.Batch.product_id == models.Product.product_id)
+        .join(models.SaleLine, models.SaleLine.batch_id == models.Batch.batch_id)
+        .join(models.Sale, models.Sale.sale_id == models.SaleLine.sale_id)
+        .filter(models.Sale.store_id == store_id)
+        .group_by(models.Product.product_id)
+        .subquery()
+    )
+
+    # Combine totals and days to calculate average
+    results = (
+        db.query(
+            totals_subquery.c.product_id,
+            totals_subquery.c.product_name,
+            totals_subquery.c.total_quantity_sold,
+            days_subquery.c.total_days_with_sales,
+        )
+        .join(
+            days_subquery,
+            totals_subquery.c.product_id == days_subquery.c.product_id,
+        )
+        .all()
+    )
+
+    response: List[schemas.AverageDailySalesPerProduct] = []
+
+    for r in results:
+        days = r.total_days_with_sales or 1
+        avg_daily_sales = round(r.total_quantity_sold / days)
+
+        response.append(
+            schemas.AverageDailySalesPerProduct(
+                product_id=r.product_id,
+                product_name=r.product_name,
+                average_daily_sales=avg_daily_sales,
+                total_days_with_sales=days,
+                total_quantity_sold=int(r.total_quantity_sold),
+            )
+        )
+
+    return response
+
 # Stock predictions
 @router.get("/predictions", response_model=schemas.StockPredictionsResponse)
 def get_predictions(
     store_id: int = Query(..., gt=0),
     db: Session = Depends(database.get_db),
 ):
+    # Call service to get stock predictions
     return StockService.get_stock_predictions(db, store_id)

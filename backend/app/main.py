@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .services import stock_report
 from .database import engine, Base
-from .routers import products, stock, sales, batches, alerts, reports, analytics, replenishment, users
+from .routers import products, stock, sales, batches, alerts, reports, analytics, replenishment, users, session, categories
 
 Base.metadata.create_all(bind=engine)
 
@@ -27,6 +27,8 @@ app.include_router(stock_report.router, tags=["Stock Reports"])
 app.include_router(analytics.router, tags=["Analytics"])
 app.include_router(replenishment.router, tags=["Replenishment"])
 app.include_router(users.router, tags=["Users"])
+app.include_router(session.router, tags=["Session"])
+app.include_router(categories.router, tags=["Categories"])
 
 @app.get("/")
 def read_root():
