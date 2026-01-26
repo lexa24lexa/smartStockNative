@@ -16,7 +16,7 @@ from app import models, database
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
-# ---- Helpers ----
+# Helpers
 def _month_range(year: int, month: int):
     if month < 1 or month > 12:
         raise HTTPException(status_code=400, detail="month must be 1..12")
@@ -24,21 +24,21 @@ def _month_range(year: int, month: int):
     end = datetime(year + (month // 12), (month % 12) + 1, 1)
     return start, end
 
-# ---- Build Monthly Report ----
+# Build Monthly Report
 def _build_monthly_report(db: Session, store_id: int, year: int, month: int,
                           category_id: int | None = None, product_id: int | None = None) -> dict[str, Any]:
     start, end = _month_range(year, month)
 
     return _build_report(db, store_id, start, end, category_id, product_id, year=year, month=month)
 
-# ---- Build Daily Report ----
+# Build Daily Report
 def _build_daily_report(db: Session, store_id: int, report_date: date,
                         category_id: int | None = None, product_id: int | None = None) -> dict[str, Any]:
     start = datetime.combine(report_date, datetime.min.time())
     end = datetime.combine(report_date, datetime.max.time())
     return _build_report(db, store_id, start, end, category_id, product_id, day=report_date.isoformat())
 
-# ---- Core Report Builder ----
+# Core Report Builder
 def _build_report(db: Session, store_id: int, start: datetime, end: datetime,
                   category_id: int | None, product_id: int | None,
                   year: int | None = None, month: int | None = None,
@@ -115,7 +115,7 @@ def _build_report(db: Session, store_id: int, start: datetime, end: datetime,
 
     return report
 
-# ---- CSV Export ----
+# CSV Export
 def _report_to_csv(report: dict[str, Any]) -> str:
     out = io.StringIO()
     w = csv.writer(out)
@@ -131,7 +131,7 @@ def _report_to_csv(report: dict[str, Any]) -> str:
         w.writerow([p["product_id"],p["name"],p["qty_sold"],p["revenue"]])
     return out.getvalue()
 
-# ---- Excel Export ----
+# Excel Export
 def _report_to_excel(report: dict[str, Any]) -> bytes:
     buffer = io.BytesIO()
     workbook = xlsxwriter.Workbook(buffer)
@@ -165,7 +165,7 @@ def _report_to_excel(report: dict[str, Any]) -> bytes:
     buffer.seek(0)
     return buffer.getvalue()
 
-# ---- PDF Export ----
+# PDF Export
 def _report_to_pdf(report: dict[str, Any]) -> bytes:
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
@@ -207,7 +207,7 @@ def _report_to_pdf(report: dict[str, Any]) -> bytes:
     buffer.seek(0)
     return buffer.getvalue()
 
-# ---- Monthly Endpoint ----
+# Monthly Endpoint
 @router.get("/monthly")
 def get_monthly_report(
     store_id: int = Query(...),
@@ -224,7 +224,7 @@ def get_monthly_report(
     report = _build_monthly_report(db, store_id, year, month, category_id, product_id)
     return _export_report(report, format)
 
-# ---- Daily Endpoint ----
+# Daily Endpoint
 @router.get("/daily")
 def get_daily_report(
     store_id: int = Query(...),
@@ -237,7 +237,7 @@ def get_daily_report(
     report = _build_daily_report(db, store_id, report_date, category_id, product_id)
     return _export_report(report, format)
 
-# ---- Export Helper ----
+# Export Helper
 def _export_report(report: dict[str, Any], format: str):
     fmt = format.lower()
     if fmt == "json":

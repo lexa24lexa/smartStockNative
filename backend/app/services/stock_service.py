@@ -266,7 +266,6 @@ class StockService:
             predictions=predictions,
         )
 
-
 class FIFOService:
     @staticmethod
     # Helper to get FIFO ordered batches for a product in a store

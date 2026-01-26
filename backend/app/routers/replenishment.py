@@ -5,10 +5,10 @@ from typing import List, Optional
 from datetime import date, date as date_class, timedelta
 from .. import models, database, schemas
 from .deps import get_current_user
+from ..models import Stock, Batch
+from ..database import get_db
 
 router = APIRouter()
-
-# Replenishment Frequency CRUD
 
 # Create or update a replenishment frequency for a product at a store
 @router.post("/replenishment-frequency", response_model=schemas.ReplenishmentFrequencyResponse)
@@ -90,6 +90,7 @@ def update_replenishment_frequency(product_id: int, store_id: int, frequency_upd
 # Record a replenishment event
 @router.patch("/replenishment-frequency/{product_id}/{store_id}/replenish", response_model=schemas.ReplenishmentFrequencyResponse)
 def record_replenishment(product_id: int, store_id: int, replenishment_data: schemas.ReplenishmentRecord = Body(...), db: Session = Depends(database.get_db)):
+
     frequency = db.query(models.ReplenishmentFrequency).filter(
         models.ReplenishmentFrequency.product_id == product_id,
         models.ReplenishmentFrequency.store_id == store_id
@@ -112,21 +113,24 @@ def record_replenishment(product_id: int, store_id: int, replenishment_data: sch
 
     from sqlalchemy.exc import SQLAlchemyError
     try:
-        with db.begin():
-            frequency.last_replenishment_date = replenishment_date
-            db.add(frequency)
+        frequency.last_replenishment_date = replenishment_date
+        db.add(frequency)
 
-            log = models.ReplenishmentLog(
-                product_id=product_id,
-                store_id=store_id,
-                batch_id=replenishment_data.batch_id,
-                expiration_date=replenishment_data.expiration_date,
-                quantity=replenishment_data.quantity,
-                user_id=replenishment_data.user_id
-            )
-            db.add(log)
+        log = models.ReplenishmentLog(
+            product_id=product_id,
+            store_id=store_id,
+            batch_id=replenishment_data.batch_id,
+            expiration_date=replenishment_data.expiration_date,
+            quantity=replenishment_data.quantity,
+            user_id=replenishment_data.user_id
+        )
+        db.add(log)
+
+        db.commit()
+
         db.refresh(frequency)
         db.refresh(log)
+
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -492,15 +496,12 @@ def override_replenishment_item(
     store_id: int,
     list_date: date_class,
     product_id: int,
-    override_data: schemas.ReplenishmentListItemUpdate,
+    override_data: schemas.ReplenishmentListItemUpdate = Body(...),
     db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(get_current_user)
+    user_id: int = Body(...),
 ):
-    """
-    Allow a manager to manually adjust a replenishment item before confirmation.
-    """
-    # Only managers (role_id == 2) can override
-    if current_user.role_id != 2:
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user or user.role_id != 2:
         raise HTTPException(status_code=403, detail="Only managers can override replenishment items")
 
     # Get the list and item
@@ -550,25 +551,34 @@ def override_replenishment_item(
     )
 
 def get_fifo_batch(db: Session, store_id: int, product_id: int):
-    batch = (
-        db.query(models.Stock)
-        .join(models.Batch, models.Stock.batch_id == models.Batch.batch_id)
-        .filter(models.Stock.store_id == store_id)
-        .filter(models.Batch.product_id == product_id)
-        .order_by(models.Batch.expiration_date.asc())
+    stock = (
+        db.query(Stock)
+        .join(Batch)
+        .filter(
+            Stock.store_id == store_id,
+            Batch.product_id == product_id,
+            Stock.quantity > 0
+        )
+        .order_by(Batch.expiration_date.asc())
         .first()
     )
-    if not batch:
-        raise HTTPException(status_code=404, detail="No stock available for replenishment")
-    return batch
+
+    if not stock:
+        raise HTTPException(status_code=404, detail="No stock available")
+
+    return stock
 
 @router.get("/replenishment/{store_id}/{product_id}")
-def get_replenishment_batch(store_id: int, product_id: int, db: Session = Depends(database.get_db)):
+def get_replenishment_batch(
+    store_id: int,
+    product_id: int,
+    db: Session = Depends(get_db),
+):
     stock_item = get_fifo_batch(db, store_id, product_id)
+
     return {
-        "stock_id": stock_item.stock_id,
         "batch_id": stock_item.batch.batch_id,
         "batch_code": stock_item.batch.batch_code,
+        "expiration_date": stock_item.batch.expiration_date,
         "quantity": stock_item.quantity,
-        "expiration_date": stock_item.batch.expiration_date
     }
